@@ -1,0 +1,47 @@
+schema: spec-driven
+
+context: |
+  Product: Codex Orchestrator.
+  Desktop stack: Electron, Vue 3, TypeScript.
+  The renderer is unprivileged; privileged filesystem, process, database,
+  provider, verification, notification, and power operations live in the
+  Electron main process behind typed validated IPC.
+  The primary local agent provider is Codex app-server, isolated behind a
+  provider-neutral interface. Never use UI scraping or simulated mouse/keyboard
+  control as the Codex integration.
+  State is local-first and durable in SQLite with migrations.
+  Jobs are explicit state machines with bounded retries, persisted schedules,
+  crash recovery, approval/input states, verification evidence, and audit events.
+  Real sleep/hibernate/shutdown/restart actions are opt-in, policy-gated,
+  cancellable, audited, and simulated by default in development/tests.
+  UI must be professional, restrained, accessible, and operationally clear:
+  neutral surfaces, one restrained accent, semantic status colors only, no
+  rainbow palette, gratuitous gradients, gimmicks, or excessive animation.
+  This is an independent community project, not an official OpenAI product.
+
+rules:
+  proposal:
+    - Always include explicit goals, non-goals, capabilities, risks, and impact.
+    - Do not propose bypassing provider limits, authentication, billing, or safety controls.
+  specs:
+    - Requirements must be observable/testable and must use SHALL or MUST.
+    - Every requirement must include at least one concrete Scenario using exactly #### Scenario.
+    - Keep implementation details in design.md rather than behavior specs unless externally observable.
+  design:
+    - Define failure modes, security boundaries, recovery behavior, persistence implications, and test strategy.
+    - Keep provider-specific protocol details behind an adapter boundary.
+    - Treat disruptive OS power actions as privileged irreversible side effects requiring explicit guards.
+  tasks:
+    - Include tests, migrations, documentation, accessibility, security review, and packaging work.
+    - Do not mark a feature task done until its relevant automated checks exist and pass.
+
+operations:
+  apply:
+    guidance:
+      - Implement in small coherent slices and keep the application buildable.
+      - Use fake providers, fake clocks, and simulated power adapters for deterministic automated tests.
+      - Update tasks as work completes and record blockers rather than hiding them.
+      - Never execute a real power action during automated implementation or tests.
+  archive:
+    guidance:
+      - Archive only after strict OpenSpec validation, tests, typecheck, lint, build, documentation, and changelog review.

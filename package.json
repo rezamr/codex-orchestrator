@@ -19,6 +19,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "openspec:validate": "npx -y @fission-ai/openspec@latest validate --all --strict --no-interactive",
+    "openspec:status": "npx -y @fission-ai/openspec@latest status --all"
   }
 }

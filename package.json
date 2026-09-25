@@ -1,0 +1,24 @@
+{
+  "name": "codex-orchestrator",
+  "version": "0.0.0",
+  "description": "Desktop-first open-source orchestration layer for long-running Codex work.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "openspec:init": "npx @fission-ai/openspec@latest init --tools codex",
+    "openspec:update": "npx @fission-ai/openspec@latest update",
+    "openspec:list": "npx @fission-ai/openspec@latest list",
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "typecheck": "vue-tsc --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  }
+}

@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/rezamr/codex-orchestrator/security
+    about: Please prefer private vulnerability reporting for exploitable security issues.

@@ -61,6 +61,47 @@ function jobInput(projectId: string, objective: string, action: PowerAction = 'n
 }
 
 describe('orchestrator fake-provider workflows', () => {
+  it('loads a connected workspace and explicitly continues one saved session without duplicating it', async () => {
+    const store = new OrchestrationStore(':memory:')
+    const orchestrator = new Orchestrator(
+      store,
+      new FakePowerAdapter(),
+      new StructuredLogger(),
+      () => undefined,
+      () => new FakeProvider()
+    )
+    instances.push({ orchestrator, store })
+    await orchestrator.initialize()
+    const workspace = await orchestrator.loadCodexWorkspace()
+    expect(workspace.threads.threads).toHaveLength(2)
+    expect(workspace.threads.threads[0]?.cwd).toBe(process.cwd())
+    expect(store.listJobs()).toHaveLength(0)
+    await expect(
+      orchestrator.continueCodexThread({
+        threadId: 'fixture-codex-thread-archived',
+        objective: 'Do not run',
+        retryPolicy: { maxAutomaticAttempts: 0, baseDelaySeconds: 5, maxDelaySeconds: 10 },
+        verification: [],
+        powerPolicy: { action: 'none', countdownSeconds: 5, preventSleepWhileActive: true }
+      })
+    ).rejects.toThrow('Archived')
+    const input = {
+      threadId: 'fixture-codex-thread-active',
+      objective: 'Continue safely',
+      retryPolicy: { maxAutomaticAttempts: 0, baseDelaySeconds: 5, maxDelaySeconds: 10 },
+      verification: [],
+      powerPolicy: { action: 'none' as const, countdownSeconds: 5, preventSleepWhileActive: true }
+    }
+    const job = await orchestrator.continueCodexThread(input)
+    await waitForState(store, job.id, 'COMPLETED')
+    expect(store.getJobDetail(job.id).sessions.map((session) => session.externalId)).toEqual([
+      'fixture-codex-thread-active'
+    ])
+    expect((await orchestrator.listCodexThreads()).threads[0]?.managedJobId).toBe(job.id)
+    await expect(orchestrator.continueCodexThread(input)).rejects.toThrow('already managed')
+    expect(store.listJobs()).toHaveLength(1)
+  })
+
   it('reads a Codex thread into the current response without persisting transcript content', async () => {
     const projectPath = await mkdtemp(join(tmpdir(), 'codex-orchestrator-history-'))
     directories.push(projectPath)

@@ -14,7 +14,7 @@ async function cancel(id: string): Promise<void> {
   <div>
     <PageHeader
       title="Automations"
-      description="Persisted retries, resumes, and guarded post-completion power actions."
+      description="Orchestrator-managed retries, resumes, and guarded post-completion power actions."
     />
     <section class="safety-note">
       <strong>Safety first</strong
@@ -32,7 +32,7 @@ async function cancel(id: string): Promise<void> {
       </div>
       <EmptyState
         v-if="!store.snapshot?.upcomingSchedules.length"
-        title="No automation scheduled"
+        title="No Orchestrator action scheduled"
         description="Retry, resume, and power countdown schedules will appear here."
       />
       <div v-else class="data-list">
@@ -65,5 +65,9 @@ async function cancel(id: string): Promise<void> {
         </article>
       </div>
     </section>
+    <p class="provider-data-note">
+      Codex desktop automations are not listed here: the supported app-server interface does not
+      expose their index. This page shows only schedules created and persisted by Orchestrator.
+    </p>
   </div>
 </template>

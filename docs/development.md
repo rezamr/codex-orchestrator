@@ -99,6 +99,8 @@ Critical GUI flows:
 
 The default tests use provider fixtures and simulated power; they must not invoke real machine power commands or a usage-consuming Codex turn. A separate opt-in read-only Codex compatibility test is available for maintainers with an installed CLI:
 
+Electron E2E runs set `CODEX_ORCHESTRATOR_E2E_FAKE_PROVIDER=1` in an unpackaged test process. This selects the fake provider and forces every provider factory request to a fake, even if a UI test accidentally chooses Codex. This safeguard is not active in packaged builds. E2E also uses `FakePowerAdapter` and a temporary data directory.
+
 ```powershell
 $env:CODEX_ORCHESTRATOR_LIVE_CODEX_TEST = '1'
 npm exec -- vitest run tests/integration/codex-live-readonly.test.ts

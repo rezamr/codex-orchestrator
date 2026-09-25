@@ -110,3 +110,29 @@ The system SHALL allow a user to inspect a selected stored Codex thread's turns 
 - **WHEN** a stored thread contains more than 1,000 turns or more than 2 MB of projected text
 - **THEN** the application presents content within the safe view bound and clearly tells the user that the display is truncated
 - **AND** the original Codex thread remains unchanged
+
+### Requirement: Preserve provider workspace and source metadata
+
+The system SHALL project supported thread working directory, canonical project assignment, model, source, and runtime status into typed application data without treating connection-local `notLoaded` as a job lifecycle result.
+
+#### Scenario: A stored thread belongs to a local workspace
+
+- **WHEN** `thread/list` returns `cwd`, `projectId`, and `source`
+- **THEN** Projects and Jobs can group and label that conversation by the returned workspace and source
+- **AND** the application does not invent a project assignment when the provider omits it
+
+### Requirement: Explicit continuation of an existing Codex thread
+
+The provider SHALL resume an eligible stored thread by its original id only after an explicit user request and SHALL start the user's new instruction as the first managed turn.
+
+#### Scenario: User chooses to continue an existing conversation
+
+- **WHEN** the user submits a new objective for a non-archived thread with a valid local working directory
+- **THEN** the application creates one durable job associated with that exact provider thread before starting the turn
+- **AND** it uses `thread/resume` followed by `turn/start`, not `thread/start`
+- **AND** duplicate local ownership of the same provider thread is rejected or opened as the existing job
+
+#### Scenario: User only browses an existing conversation
+
+- **WHEN** the application loads projects, jobs, activity metadata, or a transcript
+- **THEN** no resume or turn is started

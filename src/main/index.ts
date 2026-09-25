@@ -14,6 +14,8 @@ import { Orchestrator } from './application/orchestrator'
 import { OrchestrationStore } from './infrastructure/database/store'
 import { StructuredLogger } from './infrastructure/logging/logger'
 import { FakePowerAdapter, NativePowerAdapter } from './infrastructure/platform/power-adapter'
+import { FakeProvider } from './infrastructure/providers/fake-provider'
+import { CodexAppServerProvider } from './infrastructure/providers/codex/codex-provider'
 import { registerIpcHandlers } from './ipc/handlers'
 import { isTrustedRendererUrl } from './security/trusted-renderer'
 import { IPC_CHANNELS } from '../shared/contracts/ipc'
@@ -107,6 +109,9 @@ async function setupApplication(): Promise<void> {
 
   const dataDirectory = process.env.CODEX_ORCHESTRATOR_DATA_DIR ?? app.getPath('userData')
   store = new OrchestrationStore(join(dataDirectory, 'orchestrator.db'))
+  if (!app.isPackaged && process.env.CODEX_ORCHESTRATOR_E2E_FAKE_PROVIDER === '1') {
+    store.updateSettings({ providerMode: 'fake' })
+  }
   const logger = new StructuredLogger(join(dataDirectory, 'logs', 'application.jsonl'))
   const realPowerRuntime = app.isPackaged
   const power = realPowerRuntime
@@ -119,11 +124,22 @@ async function setupApplication(): Promise<void> {
         true
       )
     : new FakePowerAdapter()
-  orchestrator = new Orchestrator(store, power, logger, (title, body) => {
-    if (store?.getSettings().notificationsEnabled && Notification.isSupported()) {
-      new Notification({ title, body, silent: false }).show()
-    }
-  })
+  orchestrator = new Orchestrator(
+    store,
+    power,
+    logger,
+    (title, body) => {
+      if (store?.getSettings().notificationsEnabled && Notification.isSupported()) {
+        new Notification({ title, body, silent: false }).show()
+      }
+    },
+    (mode) =>
+      !app.isPackaged && process.env.CODEX_ORCHESTRATOR_E2E_FAKE_PROVIDER === '1'
+        ? new FakeProvider()
+        : mode === 'fake'
+          ? new FakeProvider()
+          : new CodexAppServerProvider()
+  )
   disposeIpc = registerIpcHandlers(orchestrator)
   orchestrator.subscribe((event) => mainWindow?.webContents.send(IPC_CHANNELS.stateChanged, event))
   await orchestrator.initialize()

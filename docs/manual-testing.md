@@ -2,6 +2,8 @@
 
 Usage-consuming real Codex turns and real power actions are controlled release gates, not routine development steps. Never run either in CI, the default automated test suite, a normal workstation session, or a machine with unsaved work. The opt-in read-only Codex compatibility test is separate and does not start a turn.
 
+For `0.1.0-alpha.1`, visually confirm after launch that Dashboard has a Codex conversation/workspace summary, Projects lists working folders discovered from conversations, Jobs lists eligible existing conversations, Activity lists recent Codex updates separately from job events, and History retains read-only transcript browsing. A **Continue** click is usage-consuming and must follow the controlled real-turn procedure below; do not click it during a read-only smoke test. The Automations page intentionally shows only Orchestrator-owned schedules.
+
 ## Record for every run
 
 - application version and commit;

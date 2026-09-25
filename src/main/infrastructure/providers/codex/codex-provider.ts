@@ -139,6 +139,15 @@ function mapThreadSummary(value: unknown, archived: boolean): CodexThreadSummary
   const thread = asRecord(value)
   if (!thread || typeof thread.id !== 'string' || !thread.id.trim()) return null
   const status = asRecord(thread.status)
+  const source = asRecord(thread.source)
+  const sourceKind =
+    typeof thread.source === 'string'
+      ? thread.source
+      : source?.custom !== undefined
+        ? 'custom'
+        : source?.subAgent !== undefined
+          ? 'subAgent'
+          : thread.sourceKind
   return {
     id: stringValue(thread.id, 512) ?? '',
     name: stringValue(thread.name, 500),
@@ -147,8 +156,12 @@ function mapThreadSummary(value: unknown, archived: boolean): CodexThreadSummary
     updatedAt: numberValue(thread.updatedAt),
     archived,
     pinned: thread.isPinned === true,
-    sourceKind: stringValue(thread.sourceKind, 100),
+    sourceKind: stringValue(sourceKind, 100),
     modelProvider: stringValue(thread.modelProvider, 100),
+    model: stringValue(thread.model, 100),
+    cwd: stringValue(thread.cwd, 4_096),
+    projectId: stringValue(thread.projectId, 512),
+    managedJobId: null,
     status: stringValue(status?.type, 100)
   }
 }
@@ -383,7 +396,7 @@ export class CodexAppServerProvider implements AgentProvider {
         clientInfo: {
           name: 'codex_orchestrator',
           title: 'Codex Orchestrator',
-          version: '0.1.0-alpha.0'
+          version: '0.1.0-alpha.1'
         },
         capabilities: null
       })
@@ -509,10 +522,10 @@ export class CodexAppServerProvider implements AgentProvider {
     }
   }
 
-  async readThread(threadId: string): Promise<CodexThreadDetail> {
+  async readThread(threadId: string, includeTurns = true): Promise<CodexThreadDetail> {
     await this.ensureConnected()
     const response = asRecord(
-      await this.request<unknown>('thread/read', { threadId, includeTurns: true })
+      await this.request<unknown>('thread/read', { threadId, includeTurns })
     )
     const thread = asRecord(response?.thread) ?? response
     const summary =
@@ -527,6 +540,10 @@ export class CodexAppServerProvider implements AgentProvider {
         pinned: false,
         sourceKind: null,
         modelProvider: null,
+        model: null,
+        cwd: null,
+        projectId: null,
+        managedJobId: null,
         status: null
       } satisfies CodexThreadSummary)
     return mapThreadDetail(thread, summary)

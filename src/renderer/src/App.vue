@@ -50,7 +50,15 @@ async function cancelCountdown(id: string): Promise<void> {
   await store.refresh()
 }
 
-onMounted(store.refresh)
+onMounted(() => {
+  void store.refresh()
+  void store.refreshCodexWorkspace()
+})
+
+function refreshAll(): void {
+  void store.refresh()
+  void store.refreshCodexWorkspace()
+}
 </script>
 
 <template>
@@ -99,7 +107,7 @@ onMounted(store.refresh)
             type="button"
             title="Refresh"
             aria-label="Refresh application state"
-            @click="store.refresh"
+            @click="refreshAll"
           >
             ↻
           </button>
@@ -130,6 +138,12 @@ onMounted(store.refresh)
           ><button type="button" aria-label="Dismiss error" @click="store.error = null">×</button>
         </div>
         <div v-if="store.notice" class="toast" role="status">{{ store.notice }}</div>
+        <div v-if="store.codexError" class="alert error" role="alert">
+          <strong>Codex data could not be loaded</strong><span>{{ store.codexError }}</span>
+          <button type="button" aria-label="Dismiss Codex error" @click="store.codexError = null">
+            ×
+          </button>
+        </div>
         <component
           :is="currentComponent"
           v-if="store.snapshot"

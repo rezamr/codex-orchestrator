@@ -30,6 +30,7 @@ Because of this privilege boundary:
 - Secrets must never be persisted in plaintext application logs.
 - Codex CLI discovery must not launch `ChatGPT.exe` or enumerate protected Windows app packages. The app-server remains the owner of authentication.
 - Account checks must not expose account email or credential material. Thread history is read through supported app-server APIs, uses state-database-only listing, and does not copy transcripts into the orchestration database.
+- Continuing an existing thread is a separate explicit action, not a side effect of browsing. It must reject archived/active/already-managed sessions and validate the working directory. External Codex clients are outside the local session lock and can race a read-only check.
 - Power actions must be explicit, guarded, cancellable, and auditable.
 - Automated checks must use simulated power; they must never execute real sleep, hibernate, restart, or shutdown actions.
 - Remote content must never receive privileged Electron capabilities.

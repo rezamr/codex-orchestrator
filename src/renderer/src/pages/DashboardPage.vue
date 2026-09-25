@@ -27,6 +27,17 @@ const waiting = computed(() =>
     ['QUEUED', 'WAITING_FOR_LIMIT', 'WAITING_FOR_RETRY', 'PAUSED'].includes(job.state)
   )
 )
+const recentThreads = computed(() => (store.codexThreads?.threads ?? []).slice(0, 6))
+const workspaceCount = computed(
+  () =>
+    new Set((store.codexThreads?.threads ?? []).map((thread) => thread.cwd).filter(Boolean)).size
+)
+const primaryLimit = computed(() => store.codexConnection?.account.rateLimits?.[0]?.primary ?? null)
+
+async function inspectThread(threadId: string): Promise<void> {
+  await store.selectCodexThread(threadId)
+  emit('navigate', 'history')
+}
 </script>
 
 <template>
@@ -71,6 +82,73 @@ const waiting = computed(() =>
         ><small>persisted actions</small>
       </article>
     </div>
+
+    <section class="panel" style="margin-top: 18px">
+      <div class="section-heading">
+        <div>
+          <h2>Connected Codex workspace</h2>
+          <p>
+            Read from Codex app-server; existing conversations are not automatically turned into
+            jobs.
+          </p>
+        </div>
+      </div>
+      <p v-if="store.codexLoading" class="provider-data-note">
+        Loading Codex account and conversations…
+      </p>
+      <template v-else-if="store.codexThreads">
+        <p>
+          {{ store.codexThreads.threads.length }} conversations across {{ workspaceCount }}
+          {{ workspaceCount === 1 ? 'workspace' : 'workspaces' }} ·
+          {{ store.codexConnection?.account.planType ?? 'Plan unavailable' }} account
+        </p>
+        <p v-if="primaryLimit?.usedPercent !== null && primaryLimit?.usedPercent !== undefined">
+          Codex usage window: {{ primaryLimit.usedPercent }}% used<span
+            v-if="primaryLimit.resetsAt"
+          >
+            · resets {{ new Date(primaryLimit.resetsAt * 1000).toLocaleString() }}</span
+          >
+        </p>
+        <p
+          v-if="
+            store.codexConnection?.account.usage?.summary?.lifetimeTokens !== null &&
+            store.codexConnection?.account.usage?.summary?.lifetimeTokens !== undefined
+          "
+        >
+          Recorded lifetime usage:
+          {{
+            new Intl.NumberFormat().format(
+              store.codexConnection.account.usage.summary.lifetimeTokens
+            )
+          }}
+          tokens
+        </p>
+        <div class="data-list">
+          <button
+            v-for="thread in recentThreads"
+            :key="thread.id"
+            class="data-row"
+            type="button"
+            @click="inspectThread(thread.id)"
+          >
+            <div class="row-main">
+              <strong>{{ thread.name || thread.preview || 'Untitled conversation' }}</strong
+              ><span>{{ thread.cwd ?? 'Workspace unavailable' }}</span>
+            </div>
+            <span class="row-meta"
+              >{{ thread.archived ? 'Archived' : 'Active' }} ·
+              {{
+                thread.status === 'notLoaded' ? 'Stored' : (thread.status ?? 'Status unavailable')
+              }}</span
+            ><span aria-hidden="true">›</span>
+          </button>
+        </div>
+        <button class="button" type="button" @click="emit('navigate', 'jobs')">
+          Manage conversations
+        </button>
+      </template>
+      <p v-else>Codex data has not loaded yet. Check the connection or refresh.</p>
+    </section>
 
     <section class="panel">
       <div class="section-heading">

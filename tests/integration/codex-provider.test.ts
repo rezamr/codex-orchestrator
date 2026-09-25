@@ -121,11 +121,21 @@ describe('Codex app-server JSONL transport', () => {
       ['fixture-active-2', false],
       ['fixture-archived', true]
     ])
+    expect(index.threads[0]).toMatchObject({
+      cwd: process.cwd(),
+      projectId: 'fixture-project',
+      sourceKind: 'vscode',
+      model: 'fixture-model',
+      status: 'notLoaded'
+    })
     const transcript = await provider.readThread('fixture-active-1')
     expect(transcript.turns[0]?.items.map((item) => item.text)).toContain(
       'This transcript is read without resuming.'
     )
     expect(JSON.stringify(transcript)).not.toContain('private raw reasoning')
+    const metadataOnly = await provider.readThread('fixture-active-1', false)
+    expect(metadataOnly.turns).toHaveLength(0)
+    expect(metadataOnly.summary.cwd).toBe(process.cwd())
 
     const largeTranscript = await provider.readThread('fixture-large')
     expect(largeTranscript.turns).toHaveLength(1_000)

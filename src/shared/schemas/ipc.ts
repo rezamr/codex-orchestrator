@@ -78,6 +78,16 @@ export const codexThreadIdSchema = z
   .max(512)
   .regex(/^[A-Za-z0-9._:-]+$/)
 
+export const continueCodexThreadSchema = z
+  .object({
+    threadId: codexThreadIdSchema,
+    objective: z.string().trim().min(1).max(100_000),
+    retryPolicy: retryPolicySchema,
+    verification: z.array(verificationCheckSchema).max(20),
+    powerPolicy: powerPolicySchema
+  })
+  .strict()
+
 export const openExternalSchema = z.object({
   url: z.string().url().max(4_096)
 })

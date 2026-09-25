@@ -6,6 +6,8 @@ Codex Orchestrator uses a layered desktop architecture with a privileged Electro
 
 The orchestration engine is the product core. Vue is a presentation client of that core; Codex is one provider behind an adapter.
 
+In `0.1.0-alpha.1`, the renderer loads a bounded Codex account/thread projection at startup independently of the durable SQLite snapshot. Dashboard, Projects, Jobs, Activity, History, and Settings share that projection. Provider conversation summaries and transcripts are read-through data; only an explicit **Continue** operation creates a local job, project registration, and provider-session reference. The session link is inserted transactionally with its job and is unique per provider/external ID. Provider-specific JSON-RPC never crosses into the renderer.
+
 The boxes below are logical responsibilities, not separate processes or services. In this alpha, most orchestration behavior is implemented by the main-process `Orchestrator` and its application/infrastructure adapters.
 
 ## High-level view

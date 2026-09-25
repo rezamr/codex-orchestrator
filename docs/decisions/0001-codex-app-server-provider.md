@@ -15,6 +15,8 @@ Do not use the removed Codex MCP-server role as the application control plane. M
 
 Discover and version-check the supported Codex CLI automatically; the UI must not ask users to select the ChatGPT desktop executable. Use app-server for read-only account/usage summaries and thread history as well as the existing job lifecycle. Thread listing must avoid optional local scan-and-repair, and selected transcript reads must not resume or mutate a thread.
 
+The `0.1.0-alpha.1` UI shares bounded app-server account/thread summaries across its main pages. A stored conversation is resumed only after the user explicitly submits a new instruction; the corresponding durable job and unique session link are persisted before `thread/resume` and `turn/start`. The provider reads metadata without turns for the eligibility check. No undocumented desktop project or automation registry is read.
+
 ## Consequences
 
 - The application can use a documented programmatic lifecycle rather than screen scraping.

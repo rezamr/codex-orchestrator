@@ -87,7 +87,12 @@ input.on('line', (line) => {
               name: 'Archived fixture',
               preview: 'Old work',
               createdAt: 100,
-              updatedAt: 200
+              updatedAt: 200,
+              cwd: process.cwd(),
+              projectId: 'fixture-project',
+              source: 'cli',
+              model: 'fixture-model',
+              status: { type: 'notLoaded' }
             }
           ]
         ]
@@ -99,7 +104,12 @@ input.on('line', (line) => {
                 name: 'Second active',
                 preview: 'Page two',
                 createdAt: 300,
-                updatedAt: 400
+                updatedAt: 400,
+                cwd: process.cwd(),
+                projectId: 'fixture-project',
+                source: 'appServer',
+                model: 'fixture-model',
+                status: { type: 'notLoaded' }
               }
             ]
           ]
@@ -110,7 +120,12 @@ input.on('line', (line) => {
                 name: 'First active',
                 preview: 'Page one',
                 createdAt: 200,
-                updatedAt: 500
+                updatedAt: 500,
+                cwd: process.cwd(),
+                projectId: 'fixture-project',
+                source: 'vscode',
+                model: 'fixture-model',
+                status: { type: 'notLoaded' }
               }
             ]
           ]
@@ -164,7 +179,11 @@ input.on('line', (line) => {
           name: 'Read-only fixture transcript',
           ephemeral: false,
           status: { type: 'notLoaded' },
-          turns
+          cwd: process.cwd(),
+          projectId: 'fixture-project',
+          source: 'vscode',
+          model: 'fixture-model',
+          turns: params.includeTurns === false ? [] : turns
         }
       }
     })

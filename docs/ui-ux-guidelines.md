@@ -40,6 +40,8 @@ Diagnostics may live under Settings or an advanced area.
 
 Settings must describe automatic CLI discovery and show the detected CLI only as read-only diagnostic information; never ask the user to browse for the Codex GUI executable. Connection results distinguish provider availability from authentication status and explain when usage data is unavailable.
 
+Connected data should be visible where users work: Dashboard summarizes conversations/workspaces, Projects distinguishes discovered folders from registered local projects, Jobs offers explicit continuation of eligible conversations, and Activity separates provider conversation updates from Orchestrator audit events. Settings remains diagnostic, not the only place to see Codex data. Show a loading or actionable error state during background refresh, and do not label `notLoaded` as completed work.
+
 History & sessions must visually distinguish local Codex conversations from Orchestrator jobs. Show active/archived state and metadata, support search over the retrieved index, and load a selected transcript on demand. Make read-only behavior and any safe retrieval limit clear. Do not provide history actions that silently resume, archive, delete, or mutate Codex sessions.
 
 ## Dashboard

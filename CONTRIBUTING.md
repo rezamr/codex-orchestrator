@@ -20,6 +20,7 @@ If the requested behavior is new or changes an existing behavior contract, creat
 - Prefer typed IPC contracts and schema validation.
 - Add tests for state transitions, retries, recovery, verification, and power-action guards.
 - Keep Codex discovery automatic and provider-specific protocol code behind the provider abstraction. Do not add ChatGPT GUI automation, credential copying, or transcript persistence.
+- Keep connected Codex summaries read-through and distinguish them from durable Orchestrator jobs. Any new continuation action must be explicit, validated in main, and covered by fake-provider tests; never use a real usage-consuming turn in the default test suite.
 - Do not weaken security or safety checks to make tests pass.
 - Keep changes focused and reviewable.
 - Update docs and `CHANGELOG.md` with user-visible changes.

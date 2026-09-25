@@ -124,3 +124,13 @@
   - Blocked in this environment: no controlled sacrificial test machine is available, and development/test runs are required to use `FakePowerAdapter`. No real power command was executed.
 - [x] 13.7 Update README, architecture/development docs, compatibility notes, and CHANGELOG.
 - [x] 13.8 Produce installable `0.1.0-alpha.0` artifact and document known limitations.
+
+## 14. Connected workspace correction and alpha update
+
+- [x] 14.1 Project real Codex `cwd`, project, source, model, and runtime metadata through the provider contract with fixture and read-only compatibility coverage.
+- [x] 14.2 Load account and thread data in the background at startup and refresh it across all connected views without blocking local durable state.
+- [x] 14.3 Show discovered Codex workspaces in Projects with a validated one-click registration action and clear provider ownership.
+- [x] 14.4 Show existing Codex conversations in Jobs, Dashboard, and Activity with accurate status/source labels and links to their history.
+- [x] 14.5 Allow an explicit user continuation of an eligible existing thread as one durable job on the same session, with duplicate, archived, path, and active-work guards.
+- [x] 14.6 Default new jobs to Codex, make the Automations scope truthful, and add deterministic end-to-end coverage for populated connected views and continuation.
+- [x] 14.7 Bump to `0.1.0-alpha.1`, update public documentation and changelog, validate/package the Windows installer and portable executable, and audit the repository before publication.

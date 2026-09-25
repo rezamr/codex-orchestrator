@@ -22,7 +22,7 @@ import type {
 import { currentSchemaVersion, migrate } from './migrations'
 
 const defaultSettings: AppSettings = {
-  providerMode: 'fake',
+  providerMode: 'codex',
   maxConcurrentJobs: 2,
   perProjectExclusive: true,
   notificationsEnabled: true,
@@ -383,6 +383,12 @@ export class OrchestrationStore {
       .prepare('SELECT * FROM provider_sessions WHERE provider = ? AND external_id = ?')
       .get(provider, externalId)
     if (existing) {
+      if (String((existing as Record<string, unknown>).job_id) !== jobId) {
+        throw new AppError(
+          'CONCURRENCY_LIMIT',
+          'This provider session is already managed by another job.'
+        )
+      }
       this.database
         .prepare(
           'UPDATE provider_sessions SET updated_at = ? WHERE provider = ? AND external_id = ?'
@@ -413,6 +419,39 @@ export class OrchestrationStore {
       .prepare('SELECT * FROM provider_sessions WHERE job_id = ? ORDER BY updated_at DESC LIMIT 1')
       .get(jobId)
     return row ? mapSession(row as Record<string, unknown>) : null
+  }
+
+  jobIdForSession(provider: Job['provider'], externalId: string): string | null {
+    const row = this.database
+      .prepare('SELECT job_id FROM provider_sessions WHERE provider = ? AND external_id = ?')
+      .get(provider, externalId) as { job_id: string } | undefined
+    return row?.job_id ?? null
+  }
+
+  sessionJobIds(provider: Job['provider']): Map<string, string> {
+    const rows = this.database
+      .prepare('SELECT external_id, job_id FROM provider_sessions WHERE provider = ?')
+      .all(provider) as Array<{ external_id: string; job_id: string }>
+    return new Map(rows.map((row) => [row.external_id, row.job_id]))
+  }
+
+  createJobForSession(input: CreateJobInput, externalId: string): Job {
+    if (this.jobIdForSession(input.provider, externalId)) {
+      throw new AppError('CONCURRENCY_LIMIT', 'This provider session is already managed by a job.')
+    }
+    return this.database.transaction(() => {
+      const job = this.createJob(input)
+      this.saveSession(job.id, input.provider, externalId)
+      this.insertEvent(
+        job.id,
+        null,
+        'session.adopted',
+        'info',
+        'Existing provider session linked to job.',
+        { sessionId: externalId }
+      )
+      return job
+    })()
   }
 
   appendEvent(

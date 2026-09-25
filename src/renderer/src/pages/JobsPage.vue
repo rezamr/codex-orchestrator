@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import PageHeader from '../components/PageHeader.vue'
 import StatusPill from '../components/StatusPill.vue'
 import EmptyState from '../components/EmptyState.vue'
@@ -12,17 +12,35 @@ import type {
 } from '@shared/types/domain'
 
 const store = useOrchestratorStore()
-const emit = defineEmits<{ job: [id: string]; projects: [] }>()
+const emit = defineEmits<{ job: [id: string]; projects: []; navigate: [page: string] }>()
 const creating = ref(false)
 const advanced = ref(false)
 const projectId = ref('')
 const objective = ref('')
-const provider = ref<ProviderMode>('fake')
+const provider = ref<ProviderMode>('codex')
+onMounted(async () => {
+  if (!store.settings) await store.loadSettings()
+  provider.value = store.settings?.providerMode ?? 'codex'
+})
 const powerAction = ref<PowerAction>('none')
 const maxAttempts = ref(3)
 const selectedChecks = ref<VerificationKind[]>([])
 const customCommand = ref('')
 const customArgs = ref('')
+const continuingThreadId = ref<string | null>(null)
+const threadQuery = ref('')
+const visibleThreads = computed(() =>
+  (store.codexThreads?.threads ?? [])
+    .filter(
+      (thread) =>
+        !thread.archived &&
+        (!threadQuery.value ||
+          `${thread.name ?? ''} ${thread.preview ?? ''} ${thread.cwd ?? ''}`
+            .toLowerCase()
+            .includes(threadQuery.value.toLowerCase()))
+    )
+    .slice(0, 100)
+)
 
 const checks = computed<VerificationCheckConfig[]>(() => {
   const known: Record<Exclude<VerificationKind, 'custom'>, [string, string, string[]]> = {
@@ -58,6 +76,29 @@ const checks = computed<VerificationCheckConfig[]>(() => {
 })
 
 async function submit(): Promise<void> {
+  if (continuingThreadId.value) {
+    const created = await store.continueCodexThread({
+      threadId: continuingThreadId.value,
+      objective: objective.value,
+      retryPolicy: {
+        maxAutomaticAttempts: maxAttempts.value,
+        baseDelaySeconds: 60,
+        maxDelaySeconds: 3_600
+      },
+      verification: checks.value,
+      powerPolicy: {
+        action: powerAction.value,
+        countdownSeconds: 60,
+        preventSleepWhileActive: true
+      }
+    })
+    if (created) {
+      creating.value = false
+      continuingThreadId.value = null
+      emit('job', created.id)
+    }
+    return
+  }
   const created = await store.createJob({
     projectId: projectId.value,
     objective: objective.value,
@@ -82,6 +123,22 @@ async function submit(): Promise<void> {
   }
 }
 
+function beginContinuation(threadId: string): void {
+  continuingThreadId.value = threadId
+  creating.value = true
+  objective.value = ''
+}
+
+function toggleNewJob(): void {
+  continuingThreadId.value = null
+  creating.value = !creating.value
+}
+
+async function inspect(threadId: string): Promise<void> {
+  await store.selectCodexThread(threadId)
+  emit('navigate', 'history')
+}
+
 function toggleCheck(kind: VerificationKind): void {
   selectedChecks.value = selectedChecks.value.includes(kind)
     ? selectedChecks.value.filter((entry) => entry !== kind)
@@ -101,7 +158,7 @@ function checkLabel(kind: VerificationKind): string {
         class="button primary"
         type="button"
         :disabled="store.projects.length === 0"
-        @click="creating = !creating"
+        @click="toggleNewJob"
       >
         {{ creating ? 'Close' : 'New job' }}
       </button>
@@ -110,12 +167,18 @@ function checkLabel(kind: VerificationKind): string {
     <form v-if="creating" class="panel form-panel" @submit.prevent="submit">
       <div class="section-heading">
         <div>
-          <h2>New job</h2>
-          <p>The job is persisted before provider work starts.</p>
+          <h2>{{ continuingThreadId ? 'Continue Codex conversation' : 'New job' }}</h2>
+          <p>
+            {{
+              continuingThreadId
+                ? 'Your new instruction starts a turn in the existing Codex conversation after the job is persisted.'
+                : 'The job is persisted before provider work starts.'
+            }}
+          </p>
         </div>
       </div>
       <div class="form-grid two">
-        <label
+        <label v-if="!continuingThreadId"
           ><span>Project</span
           ><select v-model="projectId" required>
             <option value="" disabled>Select a project</option>
@@ -124,7 +187,7 @@ function checkLabel(kind: VerificationKind): string {
             </option>
           </select></label
         >
-        <label
+        <label v-if="!continuingThreadId"
           ><span>Provider</span
           ><select v-model="provider">
             <option value="fake">Simulated provider</option>
@@ -214,7 +277,7 @@ function checkLabel(kind: VerificationKind): string {
       </div>
       <div class="form-actions">
         <button class="button primary" type="submit" :disabled="store.loading">
-          Create and start job
+          {{ continuingThreadId ? 'Continue this conversation' : 'Create and start job' }}
         </button>
       </div>
     </form>
@@ -262,6 +325,69 @@ function checkLabel(kind: VerificationKind): string {
           </tbody>
         </table>
       </div>
+    </section>
+
+    <section class="panel" style="margin-top: 18px">
+      <div class="section-heading">
+        <div>
+          <h2>Existing Codex conversations</h2>
+          <p>
+            Browse saved Codex work here. Continuing one creates a durable Orchestrator job and
+            sends only the instruction you confirm.
+          </p>
+        </div>
+      </div>
+      <label class="thread-search"
+        ><span class="sr-only">Search Codex conversations</span
+        ><input v-model="threadQuery" type="search" placeholder="Search conversations or workspace"
+      /></label>
+      <p v-if="store.codexLoading" class="provider-data-note">Loading Codex conversations…</p>
+      <EmptyState
+        v-else-if="!visibleThreads.length"
+        title="No active Codex conversations found"
+        description="Check the Codex connection or open History for archived conversations."
+      />
+      <div v-else class="data-list">
+        <article v-for="thread in visibleThreads" :key="thread.id" class="data-row static">
+          <div class="row-main">
+            <strong>{{ thread.name || thread.preview || 'Untitled conversation' }}</strong
+            ><span
+              >{{ thread.cwd ?? 'Workspace unavailable' }} ·
+              {{ thread.sourceKind ?? 'Source unavailable' }} ·
+              {{
+                thread.status === 'notLoaded' ? 'Stored' : (thread.status ?? 'Status unavailable')
+              }}</span
+            >
+          </div>
+          <span class="row-meta">{{
+            thread.updatedAt
+              ? new Date(thread.updatedAt * 1000).toLocaleString()
+              : 'Date unavailable'
+          }}</span>
+          <button class="button" type="button" @click="inspect(thread.id)">Inspect</button>
+          <button
+            v-if="thread.managedJobId"
+            class="button"
+            type="button"
+            @click="emit('job', thread.managedJobId)"
+          >
+            Open job
+          </button>
+          <button
+            v-else
+            class="button primary"
+            type="button"
+            :disabled="!thread.cwd || thread.status === 'active' || thread.status === 'running'"
+            @click="beginContinuation(thread.id)"
+          >
+            Continue
+          </button>
+        </article>
+      </div>
+      <p class="provider-data-note">
+        Showing up to 100 recent active conversations. Open History for the full index and
+        transcripts.
+      </p>
     </section>
   </div>
 </template>

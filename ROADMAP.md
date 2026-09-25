@@ -1,6 +1,6 @@
 # Roadmap
 
-This roadmap describes direction, not release dates. Completed capabilities refer to the current `0.1.0-alpha.0` implementation; they do not imply that every platform or real-world power action has been manually validated.
+This roadmap describes direction, not release dates. Completed capabilities refer to the current `0.1.0-alpha.1` implementation; they do not imply that every platform or real-world power action has been manually validated.
 
 ## Implemented in `0.1.0-alpha.0`
 
@@ -13,6 +13,12 @@ This roadmap describes direction, not release dates. Completed capabilities refe
 - Guarded and cancellable post-completion power countdowns plus sleep prevention through platform adapters.
 - Windows NSIS and portable packaging targets; macOS DMG and Linux AppImage targets are configured but not validated by the current Windows CI.
 
+## Added in `0.1.0-alpha.1`
+
+- Shared background Codex account/history loading, discovered workspace projection, and existing conversation views across the main pages.
+- Explicit eligible-conversation continuation as a durable same-session job, with local duplicate/archived/active/path guards and fake-provider E2E coverage.
+- Codex as the default job provider and a truthful Orchestrator-only Automations scope.
+
 ## Alpha limitations and remaining validation
 
 - Controlled manual testing of real Windows lock, sleep, hibernate, shutdown, and restart actions remains OpenSpec task 13.6. Do not run these actions in CI or on an ordinary development workstation.
@@ -20,6 +26,7 @@ This roadmap describes direction, not release dates. Completed capabilities refe
 - Real disruptive power actions are off by default and unavailable outside packaged Windows builds. macOS/Linux disruptive power support and reliable automatic wake scheduling are not implemented.
 - Artifacts are unsigned, Windows is the only current CI platform, and schema downgrade is unsupported.
 - Codex history retrieval is intentionally bounded; Orchestrator does not copy transcripts to its database.
+- Codex desktop automation and standalone project indexes are not exposed by the supported app-server interface; workspaces are inferred from conversation working folders. External Codex clients can race an Orchestrator continuation check.
 
 ## Planned next
 

@@ -39,13 +39,19 @@ Normal users do not choose an executable path. On Windows, search the per-user C
 
 The provider starts only `codex app-server --stdio`, performs `initialize`/`initialized`, and uses the installed Codex environment's existing supported authentication. It does not create a separate token flow.
 
-### Read-only Codex data sync
+### Connected Codex workspace
 
 On an explicit connection check and when the Codex History view is opened, query `account/read` without forcing token refresh, `account/rateLimits/read`, and `account/usage/read`. Retain only safe account/auth mode and plan status plus returned usage/limit summaries; omit account email and credentials. Do not call reset-credit consumption, login/logout, or other mutating endpoints.
 
 Load pages of `thread/list` for active and archived threads and supported source kinds with `useStateDbOnly: true`, avoiding the server's optional local log scan-and-repair. Bound index retrieval to 20,000 threads and report when the bound is reached. The history index is a read-through view of app-server state and remains distinct from orchestrator jobs. Fetch a selected thread's turns with `thread/read(includeTurns: true)` only when the user opens it, then bound renderer projection to 1,000 turns and 2 MB of text, with an explicit truncated indicator. Reading history must not resume/load a thread, start a turn, or mutate/archive/delete provider data. Transcript content stays in the current view/session and is not duplicated into the orchestration database by default.
 
 History synchronization is best-effort and isolated from normal job control: an unavailable provider or unsupported account endpoint must leave orchestrator-owned jobs usable and surface which Codex data could not be refreshed.
+
+Start read-through account and thread refresh in the background when the desktop workspace opens, and allow a deliberate refresh from the shell. Default a newly created real-user job to Codex; the fake provider remains an explicit development/testing choice.
+
+Project, source, model, and runtime labels use actual app-server thread fields (`cwd`, `projectId`, `source`, `model`, and `status`). Group stored conversations by their working directory in Projects without automatically copying provider data into SQLite. A discovered local folder can be registered with one click after main-process path validation. Jobs shows existing Codex conversations alongside Orchestrator jobs, clearly distinguishing a stored conversation from an actively managed attempt. Dashboard summarizes both sources without treating `notLoaded` in this app-server connection as proof of a job lifecycle result. Activity shows recent Codex conversation updates as metadata, distinct from Orchestrator's event audit. Automations shows only Orchestrator-owned schedules unless a documented provider automation API becomes available; an empty local schedule list does not mean Codex has no scheduled tasks.
+
+A user may explicitly continue an eligible non-archived stored Codex conversation. Before starting a turn, main validates its thread id, current metadata, working directory, and duplicate local ownership, then transactionally creates a durable job linked to that exact provider thread. The user's new objective is the first continuation turn; subsequent bounded retries use the ordinary continuation policy. Browsing, refreshing, selecting, and registering a project never resume a thread or consume provider usage. Missing/non-local workspaces and archived conversations remain visible but cannot be silently adopted. A previously managed thread opens its existing Orchestrator job instead of creating a duplicate.
 
 ### Durable domain
 
@@ -79,7 +85,7 @@ SQLite with numbered migrations, repositories, transactions for state/schedule u
 
 Operational desktop UI: Dashboard, Projects, Jobs, History/Sessions, Activity, Automations, Settings. Use shared design tokens and components. Avoid visual noise.
 
-History/Sessions distinguishes local Codex threads from orchestrator jobs. It shows a synchronized thread index and fetches a selected thread's turns on demand. Settings connection diagnostics show the discovered CLI, authentication/plan state, and read-only limit/usage summaries without exposing account credentials.
+History/Sessions distinguishes local Codex threads from orchestrator jobs. It shows a synchronized thread index and fetches a selected thread's turns on demand. Projects and Jobs also surface discovered work, with explicit register/continue actions. Dashboard and Activity include correctly labelled Codex metadata. Settings connection diagnostics show the discovered CLI, authentication/plan state, and read-only limit/usage summaries without exposing account credentials.
 
 ## Suggested module boundaries
 

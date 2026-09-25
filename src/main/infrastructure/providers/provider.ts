@@ -56,7 +56,7 @@ export interface AgentProvider {
   disconnect(): Promise<void>
   readAccountSnapshot(): Promise<CodexAccountSnapshot>
   listThreads(): Promise<CodexThreadIndex>
-  readThread(threadId: string): Promise<CodexThreadDetail>
+  readThread(threadId: string, includeTurns?: boolean): Promise<CodexThreadDetail>
   start(request: ProviderStartRequest): Promise<ProviderSessionRef>
   resume(request: ProviderResumeRequest): Promise<ProviderSessionRef>
   interrupt(session: ProviderSessionRef): Promise<void>

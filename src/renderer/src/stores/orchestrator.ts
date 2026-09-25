@@ -6,6 +6,7 @@ import type {
   CodexConnectionSnapshot,
   CodexThreadDetail,
   CodexThreadIndex,
+  ContinueCodexThreadInput,
   CreateJobInput,
   DashboardSnapshot,
   DiagnosticSnapshot,
@@ -26,6 +27,8 @@ export const useOrchestratorStore = defineStore('orchestrator', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
   const notice = ref<string | null>(null)
+  const codexLoading = ref(false)
+  const codexError = ref<string | null>(null)
 
   const jobs = computed(() => snapshot.value?.jobs ?? [])
   const projects = computed(() => snapshot.value?.projects ?? [])
@@ -57,7 +60,11 @@ export const useOrchestratorStore = defineStore('orchestrator', () => {
 
   async function refresh(): Promise<void> {
     const result = await run(() => window.orchestrator.getSnapshot())
-    if (result) snapshot.value = result
+    if (result)
+      snapshot.value =
+        codexConnection.value?.provider.mode === result.provider.mode
+          ? { ...result, provider: codexConnection.value.provider }
+          : result
     if (selectedJob.value) await selectJob(selectedJob.value.job.id)
   }
 
@@ -113,6 +120,12 @@ export const useOrchestratorStore = defineStore('orchestrator', () => {
     const result = await run(() => window.orchestrator.updateSettings(patch), 'Settings saved.')
     if (result) settings.value = result
     await refresh()
+    if (result && patch.providerMode) {
+      codexConnection.value = null
+      codexThreads.value = null
+      selectedCodexThread.value = null
+      await refreshCodexWorkspace()
+    }
   }
 
   async function probeProvider(): Promise<ProviderStatus | null> {
@@ -120,18 +133,40 @@ export const useOrchestratorStore = defineStore('orchestrator', () => {
   }
 
   async function checkCodexConnection(): Promise<void> {
-    const result = await run(() => window.orchestrator.checkCodexConnection())
-    if (!result) return
-    codexConnection.value = result
-    if (snapshot.value) snapshot.value = { ...snapshot.value, provider: result.provider }
+    await refreshCodexWorkspace()
+  }
+
+  async function refreshCodexWorkspace(): Promise<void> {
+    if (codexLoading.value) return
+    codexLoading.value = true
+    codexError.value = null
+    try {
+      const result = await window.orchestrator.loadCodexWorkspace()
+      codexConnection.value = { provider: result.provider, account: result.account }
+      codexThreads.value = result.threads
+      if (snapshot.value) snapshot.value = { ...snapshot.value, provider: result.provider }
+    } catch (caught) {
+      codexError.value = messageFrom(caught)
+    } finally {
+      codexLoading.value = false
+    }
   }
 
   async function loadCodexThreads(): Promise<void> {
-    const result = await run(() => window.orchestrator.listCodexThreads())
+    await refreshCodexWorkspace()
+  }
+
+  async function continueCodexThread(input: ContinueCodexThreadInput): Promise<Job | null> {
+    const result = await run(
+      () => window.orchestrator.continueCodexThread(input),
+      'Codex conversation added as a job.'
+    )
     if (result) {
-      codexThreads.value = result
-      selectedCodexThread.value = null
+      await refresh()
+      await refreshCodexWorkspace()
+      await selectJob(result.id)
     }
+    return result
   }
 
   async function selectCodexThread(threadId: string): Promise<void> {
@@ -165,6 +200,8 @@ export const useOrchestratorStore = defineStore('orchestrator', () => {
     loading,
     error,
     notice,
+    codexLoading,
+    codexError,
     refresh,
     selectJob,
     clearSelectedJob,
@@ -177,6 +214,8 @@ export const useOrchestratorStore = defineStore('orchestrator', () => {
     saveSettings,
     probeProvider,
     checkCodexConnection,
+    refreshCodexWorkspace,
+    continueCodexThread,
     loadCodexThreads,
     selectCodexThread,
     loadDiagnostics

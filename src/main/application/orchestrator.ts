@@ -1,5 +1,5 @@
 import { realpath, stat } from 'node:fs/promises'
-import { isAbsolute, resolve } from 'node:path'
+import { basename, isAbsolute, resolve } from 'node:path'
 import { AppError } from '@shared/errors'
 import type {
   AppSettings,
@@ -7,6 +7,8 @@ import type {
   CodexConnectionSnapshot,
   CodexThreadDetail,
   CodexThreadIndex,
+  CodexWorkspaceSnapshot,
+  ContinueCodexThreadInput,
   CreateJobInput,
   DashboardSnapshot,
   DiagnosticSnapshot,
@@ -285,7 +287,7 @@ export class Orchestrator {
     const settings = this.store.getSettings()
     const provider = this.providerFactory(settings.providerMode, settings)
     try {
-      return await provider.listThreads()
+      return this.withManagedJobs(await provider.listThreads(), settings.providerMode)
     } finally {
       await provider.disconnect()
     }
@@ -295,9 +297,108 @@ export class Orchestrator {
     const settings = this.store.getSettings()
     const provider = this.providerFactory(settings.providerMode, settings)
     try {
-      return await provider.readThread(threadId)
+      const detail = await provider.readThread(threadId)
+      detail.summary.managedJobId = this.store.jobIdForSession(settings.providerMode, threadId)
+      return detail
     } finally {
       await provider.disconnect()
+    }
+  }
+
+  async loadCodexWorkspace(): Promise<CodexWorkspaceSnapshot> {
+    const settings = this.store.getSettings()
+    const provider = this.providerFactory(settings.providerMode, settings)
+    try {
+      await provider.connect()
+      const status = await provider.probe()
+      const [account, threads] = await Promise.all([
+        provider.readAccountSnapshot(),
+        provider.listThreads()
+      ])
+      return {
+        provider:
+          status.state === 'ready'
+            ? {
+                ...status,
+                state: 'available',
+                message: 'Codex app-server responded; history and account were refreshed.'
+              }
+            : status,
+        account,
+        threads: this.withManagedJobs(threads, settings.providerMode)
+      }
+    } finally {
+      await provider.disconnect()
+    }
+  }
+
+  async continueCodexThread(input: ContinueCodexThreadInput): Promise<Job> {
+    const settings = this.store.getSettings()
+    const mode = settings.providerMode
+    if (this.store.jobIdForSession(mode, input.threadId)) {
+      throw new AppError(
+        'CONCURRENCY_LIMIT',
+        'This Codex conversation is already managed by a job.'
+      )
+    }
+    const provider = this.providerFactory(mode, settings)
+    let detail: CodexThreadDetail
+    let listedThread: CodexThreadIndex['threads'][number] | undefined
+    try {
+      listedThread = (await provider.listThreads()).threads.find(
+        (entry) => entry.id === input.threadId
+      )
+      if (!listedThread) throw new AppError('VALIDATION', 'Codex conversation was not found.')
+      detail = await provider.readThread(input.threadId, false)
+    } finally {
+      await provider.disconnect()
+    }
+    const thread = {
+      ...listedThread,
+      ...detail.summary,
+      archived: listedThread.archived,
+      cwd: listedThread.cwd ?? detail.summary.cwd
+    }
+    if (thread.archived)
+      throw new AppError('VALIDATION', 'Archived conversations cannot be continued.')
+    if (
+      ['active', 'running'].includes(listedThread.status ?? '') ||
+      ['active', 'running'].includes(detail.summary.status ?? '')
+    ) {
+      throw new AppError('CONCURRENCY_LIMIT', 'This Codex conversation has an active turn.')
+    }
+    if (!thread.cwd)
+      throw new AppError('VALIDATION', 'Codex did not report a workspace for this conversation.')
+    const canonical = await this.validateProjectPath(thread.cwd)
+    let project = this.store.listProjects().find((entry) => entry.path === canonical)
+    if (!project)
+      project = this.store.createProject(basename(canonical) || 'Codex workspace', canonical)
+    const job = this.store.createJobForSession(
+      {
+        projectId: project.id,
+        objective: input.objective,
+        provider: mode,
+        profile: 'default',
+        retryPolicy: input.retryPolicy,
+        verification: input.verification,
+        powerPolicy: input.powerPolicy,
+        startImmediately: true
+      },
+      input.threadId
+    )
+    this.emit(null)
+    void this.processQueue()
+    return job
+  }
+
+  private withManagedJobs(index: CodexThreadIndex, provider: Job['provider']): CodexThreadIndex {
+    const linkedJobs = this.store.sessionJobIds(provider)
+    return {
+      ...index,
+      threads: index.threads.map((thread) => ({
+        ...thread,
+        managedJobId: linkedJobs.get(thread.id) ?? null
+      }))
     }
   }
 
@@ -397,7 +498,7 @@ export class Orchestrator {
       const ref = session
         ? await provider.resume({
             objective: job.objective,
-            continuation: CONTINUATION_PROMPT,
+            continuation: attempt.number === 1 ? job.objective : CONTINUATION_PROMPT,
             cwd: project.path,
             profile: job.profile,
             sessionId: session.externalId

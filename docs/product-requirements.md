@@ -8,7 +8,7 @@ The product exists to let a user start a task, observe it, safely leave it unatt
 
 ## Current alpha status
 
-The current `0.1.0-alpha.0` implementation includes the desktop project/job workflow, fake and Codex app-server providers, automatic Codex CLI discovery, read-only account/usage/history views, durable jobs/schedules/recovery, verification, approvals, notifications, diagnostics, and simulated/guarded platform power adapters. Real Codex checks have been read-only; no usage-consuming turn or controlled real power-action test is claimed.
+The current `0.1.0-alpha.1` implementation includes the desktop project/job workflow, fake and Codex app-server providers, automatic Codex CLI discovery, read-only account/usage/history views across the main screens, discovered workspaces, explicit same-session continuation, durable jobs/schedules/recovery, verification, approvals, notifications, diagnostics, and simulated/guarded platform power adapters. Real Codex checks have been read-only; no usage-consuming turn or controlled real power-action test is claimed.
 
 The requirements below also record product intent. Reusable profiles, project-specific defaults, arbitrary user-authored scheduled jobs, third-party/MCP integrations, reliable wake scheduling, and non-Windows disruptive power actions are not implemented in this alpha unless explicitly stated otherwise.
 

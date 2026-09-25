@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { cwd } from 'node:process'
 import type {
   CodexAccountSnapshot,
   CodexThreadDetail,
@@ -90,6 +91,10 @@ export class FakeProvider implements AgentProvider {
           pinned: true,
           sourceKind: 'appServer',
           modelProvider: 'fake',
+          model: 'fixture-model',
+          cwd: cwd(),
+          projectId: 'fixture-project',
+          managedJobId: null,
           status: 'idle'
         },
         {
@@ -102,6 +107,10 @@ export class FakeProvider implements AgentProvider {
           pinned: false,
           sourceKind: 'cli',
           modelProvider: 'fake',
+          model: 'fixture-model',
+          cwd: cwd(),
+          projectId: 'fixture-project',
+          managedJobId: null,
           status: 'notLoaded'
         }
       ]

@@ -170,6 +170,10 @@ The provider uses the documented newline-delimited JSON app-server transport ove
 
 The adapter starts Codex with `app-server --stdio`, `approvalPolicy: on-request`, and the provider-owned `workspace-write` sandbox. It never reads or stores ChatGPT/OpenAI authentication material. A missing or signed-out Codex installation becomes an explicit provider/error or authentication-required state.
 
+Starting with `0.1.0-alpha.1`, account and thread summaries load in the background at app startup and on refresh. The provider projects `cwd`, `projectId`, `source`, model, archived state, and status into bounded shared types; `notLoaded` is displayed as **Stored**. Workspaces are grouped from thread `cwd` values, because the supported app-server interface does not provide a standalone project index. The Automations view is restricted to Orchestrator-owned schedules; no undocumented Codex desktop automation index is read.
+
+Browsing remains read-only. Continuing an existing conversation requires a separate user instruction and checks the current thread index, archival/activity status, a real canonical working directory, and local session ownership. Orchestrator persists the job and session link together, then calls `thread/resume` and `turn/start` using the new instruction. Later attempts use the standard continuation prompt. External Codex clients can change a thread between these checks; that cross-process race is a known alpha limitation, not a guarantee of exclusive ownership outside Orchestrator.
+
 Compatibility verified in automated tests:
 
 - deterministic JSONL child-process fixture covering handshake, start, resume, interrupt, approval response, account/usage reads, thread pagination, and no-resume transcript reads;

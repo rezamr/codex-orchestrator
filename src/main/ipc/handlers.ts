@@ -8,6 +8,7 @@ import { IPC_CHANNELS } from '@shared/contracts/ipc'
 import {
   approvalResponseSchema,
   codexThreadIdSchema,
+  continueCodexThreadSchema,
   createJobSchema,
   createProjectSchema,
   idSchema,
@@ -91,6 +92,10 @@ export function registerIpcHandlers(orchestrator: Orchestrator): () => void {
   handle(IPC_CHANNELS.codexThreads, () => orchestrator.listCodexThreads())
   handle(IPC_CHANNELS.codexThreadRead, (_event, threadId: unknown) =>
     orchestrator.readCodexThread(codexThreadIdSchema.parse(threadId))
+  )
+  handle(IPC_CHANNELS.codexWorkspace, () => orchestrator.loadCodexWorkspace())
+  handle(IPC_CHANNELS.codexThreadContinue, (_event, input: unknown) =>
+    orchestrator.continueCodexThread(continueCodexThreadSchema.parse(input))
   )
   handle(IPC_CHANNELS.diagnosticsSnapshot, () => orchestrator.diagnostics(app.getVersion()))
   handle(IPC_CHANNELS.diagnosticsExport, async () => {

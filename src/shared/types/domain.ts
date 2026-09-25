@@ -211,6 +211,10 @@ export interface CodexConnectionSnapshot {
   account: CodexAccountSnapshot
 }
 
+export interface CodexWorkspaceSnapshot extends CodexConnectionSnapshot {
+  threads: CodexThreadIndex
+}
+
 export interface CodexThreadSummary {
   id: string
   name: string | null
@@ -221,6 +225,10 @@ export interface CodexThreadSummary {
   pinned: boolean
   sourceKind: string | null
   modelProvider: string | null
+  model: string | null
+  cwd: string | null
+  projectId: string | null
+  managedJobId: string | null
   status: string | null
 }
 
@@ -309,6 +317,14 @@ export interface CreateJobInput {
   powerPolicy: PowerPolicy
   note?: string
   startImmediately: boolean
+}
+
+export interface ContinueCodexThreadInput {
+  threadId: string
+  objective: string
+  retryPolicy: RetryPolicy
+  verification: VerificationCheckConfig[]
+  powerPolicy: PowerPolicy
 }
 
 export interface CreateProjectInput {

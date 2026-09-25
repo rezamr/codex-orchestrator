@@ -10,6 +10,7 @@ Codex Orchestrator needs a complete first implementation that can manage durable
 - Connect programmatically to local Codex through a provider abstraction, with Codex app-server as the primary provider.
 - Automatically discover and validate the supported Codex CLI executable; never treat the ChatGPT desktop GUI executable as the app-server binary.
 - Read and present connected Codex account state, current usage/limit summaries, and existing local Codex thread history through app-server without taking ownership of authentication.
+- Surface discovered Codex workspaces and conversations in Projects, Jobs, Dashboard, and Activity, with an explicit path to continue an existing conversation as a durable job.
 - Persist projects, jobs, attempts, sessions, schedules, events, settings, approvals, and verification evidence in SQLite.
 - Implement explicit lifecycle, retry, usage-limit waiting, resume, crash-recovery, and approval/input states.
 - Provide a professional, restrained, accessible desktop UI.
@@ -27,7 +28,7 @@ Codex Orchestrator needs a complete first implementation that can manage durable
 
 ## What Changes
 
-This change introduces the entire initial desktop application foundation: Electron process boundaries, Vue UI, provider integration and discovery, read-only access to existing Codex account/usage/history data, orchestration state machines, durable persistence, scheduler/recovery, verification, notifications/diagnostics, and platform power adapters.
+This change introduces the entire initial desktop application foundation: Electron process boundaries, Vue UI, provider integration and discovery, read-only access to existing Codex account/usage/history data, cross-screen workspace and conversation projections, explicit adoption of a stored conversation for new work, orchestration state machines, durable persistence, scheduler/recovery, verification, notifications/diagnostics, and platform power adapters.
 
 ## Capabilities
 
@@ -54,4 +55,4 @@ This change introduces the entire initial desktop application foundation: Electr
 
 ## Impact
 
-The repository moves from specification-only foundation to a working desktop application. This change establishes the initial persisted data model and therefore requires explicit migrations from the first schema onward. Existing Codex account summaries, usage/limit data, and thread history are read through the supported local app-server and presented separately from orchestrator jobs; authentication secrets and source app-server files remain provider-owned. It also establishes public UI and provider contracts that future changes should evolve through OpenSpec.
+The repository moves from specification-only foundation to a working desktop application. This change establishes the initial persisted data model and therefore requires explicit migrations from the first schema onward. Existing Codex account summaries, usage/limit data, and thread history are read through the supported local app-server and presented with clear ownership labels across the relevant views. A user can explicitly continue an eligible stored conversation as a durable job on the same provider thread; browsing alone never starts work. Authentication secrets and source app-server files remain provider-owned. It also establishes public UI and provider contracts that future changes should evolve through OpenSpec.

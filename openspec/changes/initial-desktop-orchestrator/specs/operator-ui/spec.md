@@ -67,3 +67,39 @@ The system SHALL present current Codex account/usage status and existing local C
 - **WHEN** the provider is not installed, signed out, or cannot read history
 - **THEN** the UI shows the specific connection/history state and a safe next step
 - **AND** the user can still inspect orchestrator-owned job history
+
+### Requirement: Connected work appears where it is useful
+
+The system SHALL load available Codex account and thread data in the background and surface discovered workspaces in Projects, existing conversations in Jobs and History, and recent conversation metadata in Dashboard and Activity. Each view SHALL distinguish provider-owned records from durable Orchestrator records.
+
+#### Scenario: First launch has Codex history but no Orchestrator database records
+
+- **WHEN** Codex returns stored threads with working directories
+- **THEN** Projects shows the discovered workspaces and a one-click registration action for valid local folders
+- **AND** Jobs shows the existing conversations and a way to inspect or continue eligible ones
+- **AND** Dashboard and Activity show truthful provider summaries instead of claiming that no Codex work exists
+
+#### Scenario: Provider history cannot be refreshed
+
+- **WHEN** the Codex app-server is unavailable
+- **THEN** each connected view presents the refresh error without hiding Orchestrator-owned jobs or projects
+
+### Requirement: Useful default for new work
+
+The system SHALL default a newly created user job to the Codex provider while keeping simulation an explicit choice.
+
+#### Scenario: User opens the new job form after connecting to Codex
+
+- **WHEN** the user begins a new job
+- **THEN** Codex app-server is selected by default
+- **AND** a simulated run requires the user to select it deliberately
+
+### Requirement: Automation scope is explicit
+
+The Automations view SHALL identify its persisted Orchestrator schedules as such and SHALL NOT imply that an empty local schedule list enumerates Codex desktop scheduled tasks when the supported app-server has no automation listing method.
+
+#### Scenario: No Orchestrator schedule exists
+
+- **WHEN** the user opens Automations
+- **THEN** the view explains that there is no Orchestrator-owned schedule
+- **AND** it does not claim that Codex has no scheduled tasks

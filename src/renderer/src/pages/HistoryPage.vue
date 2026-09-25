@@ -97,10 +97,11 @@ async function refreshCodexHistory(): Promise<void> {
               }}</span>
               <span class="thread-entry-meta">
                 {{ thread.archived ? 'Archived' : 'Active' }} ·
-                {{ thread.status ?? 'Status unknown' }} ·
-                {{ thread.sourceKind ?? 'Unknown source' }} ·
-                {{ thread.modelProvider ?? 'Provider unknown' }} ·
+                {{ thread.status === 'notLoaded' ? 'Stored' : (thread.status ?? 'Status unknown') }}
+                · {{ thread.sourceKind ?? 'Unknown source' }} ·
+                {{ thread.model ?? thread.modelProvider ?? 'Model unknown' }} ·
                 {{ thread.pinned ? 'Pinned' : 'Unpinned' }} · {{ formatDate(thread.updatedAt) }}
+                <br />{{ thread.cwd ?? 'Workspace unavailable' }}
               </span>
             </button>
           </div>

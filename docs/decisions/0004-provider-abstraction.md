@@ -20,3 +20,4 @@ The provider contract includes normalized read-only account, usage, and thread-h
 - Additional providers can be considered later without rewriting orchestration.
 - The abstraction must remain pragmatic and must not hide capabilities the UI genuinely needs.
 - Local Codex-specific UI capabilities are exposed as bounded shared domain types rather than raw protocol payloads.
+- The `0.1.0-alpha.1` connected-workspace projection is shared across pages but remains read-through. Only an explicit continuation creates durable job/session ownership; standalone Codex project and desktop-automation indexes are not inferred from undocumented APIs.

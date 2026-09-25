@@ -2,6 +2,23 @@
 
 All notable user-facing changes are recorded here. The project follows Semantic Versioning after its first stable release.
 
+## [0.1.0-alpha.1] - 2026-09-25
+
+### Changed
+
+- Load Codex account and conversation summaries at startup and refresh them across Dashboard, Projects, Jobs, Activity, History, and Settings instead of confining the data to Settings and History.
+- Discover Codex workspaces from conversation working folders, with explicit validated registration; show existing conversations in Jobs and accurate source/model/workspace metadata in History.
+- Add an explicit **Continue** flow that attaches an eligible existing conversation to a durable job using its original session ID. Browsing remains read-only; duplicate, archived, active, and missing-workspace guards apply.
+- Default newly created jobs to Codex app-server; retain the deterministic simulated provider for development and testing. Clarify that Automations lists only Orchestrator-managed schedules because Codex desktop automation listing is not exposed by the supported app-server API.
+- Add populated-view and same-session continuation coverage to integration and Electron E2E tests. The E2E runtime forces fake provider and power adapters, even if a test selects Codex accidentally.
+- Correct an initial alpha.1 E2E safety regression: the changed default briefly let one test initiate a real Codex turn. That run timed out and the test app closed; usage impact is unknown. The harness now forces the fake provider for all E2E provider requests.
+- Bump installer and portable app version to `0.1.0-alpha.1` for in-place upgrade identification.
+
+### Limitations
+
+- Live Codex validation remains read-only; a usage-consuming continuation has not been manually tested. External Codex clients can change a conversation after a read, so concurrent activity outside Orchestrator cannot be ruled out by its local session lock alone.
+- Real power actions still require controlled manual validation; unsigned artifacts remain for early testers only.
+
 ## [0.1.0-alpha.0] - 2026-09-25
 
 ### Added

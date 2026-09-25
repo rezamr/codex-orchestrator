@@ -50,3 +50,5 @@ codex-orchestrator/
 ```
 
 Build output (`out/`, `release/`), databases, logs, caches, Playwright results, local secrets, and dependencies are generated or machine-specific and are excluded by `.gitignore`.
+
+The renderer store contains a shared read-through Codex account/thread projection for all pages; it is not a mirror of Codex history in SQLite. The narrow IPC contract also exposes a separately validated explicit conversation-continuation action. SQLite stores a session reference only after that action is accepted.

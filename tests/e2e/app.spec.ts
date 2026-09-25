@@ -29,6 +29,7 @@ async function launch(dataDirectory?: string, projectDirectory?: string): Promis
     env: {
       ...process.env,
       CODEX_ORCHESTRATOR_DATA_DIR: data,
+      CODEX_ORCHESTRATOR_E2E_FAKE_PROVIDER: '1',
       CODEX_ORCHESTRATOR_ENABLE_REAL_POWER_ACTIONS: 'DISABLED_IN_E2E'
     }
   })
@@ -102,6 +103,7 @@ test('creates and completes a job through the desktop UI', async () => {
   await harness.page.getByRole('button', { name: 'Jobs', exact: true }).click()
   await harness.page.getByRole('button', { name: 'New job' }).click()
   await harness.page.getByLabel('Project').selectOption(projectId)
+  await harness.page.getByLabel('Provider').selectOption('fake')
   await harness.page.getByLabel('Objective').fill('Complete the Electron E2E workflow')
   await harness.page.getByRole('button', { name: 'Create and start job' }).click()
 
@@ -199,4 +201,37 @@ test('browses fake Codex active and archived history without resuming a thread',
   await expect(harness.page.getByText('Usage lifetime tokens', { exact: true })).toBeVisible()
   await expect(harness.page.getByText('Simulated Codex window', { exact: true })).toBeVisible()
   await expect(harness.page.getByText('Primary: 25% used', { exact: true })).toBeVisible()
+})
+
+test('projects and jobs show connected Codex data and continue a saved conversation through the GUI', async () => {
+  const harness = await launch()
+  await expect(
+    harness.page.getByRole('heading', { name: 'Connected Codex workspace' })
+  ).toBeVisible()
+  await expect(harness.page.getByText('2 conversations across 1 workspace')).toBeVisible()
+  await harness.page.getByRole('button', { name: 'Projects', exact: true }).click()
+  await expect(harness.page.getByRole('heading', { name: 'Codex workspaces' })).toBeVisible()
+  await expect(harness.page.getByText('2 conversations')).toBeVisible()
+  await harness.page.getByRole('button', { name: 'Register', exact: true }).click()
+  await expect(harness.page.getByText('Registered', { exact: true })).toBeVisible()
+  await harness.page.getByRole('button', { name: 'Jobs', exact: true }).click()
+  await expect(
+    harness.page.getByRole('heading', { name: 'Existing Codex conversations' })
+  ).toBeVisible()
+  await harness.page.getByRole('button', { name: 'Continue', exact: true }).click()
+  await harness.page.getByLabel('Objective').fill('Continue the saved Codex session')
+  await harness.page.getByRole('button', { name: 'Continue this conversation' }).click()
+  await expect(harness.page.getByText('Completed', { exact: true })).toBeVisible({
+    timeout: 10_000
+  })
+  const sessions = await harness.page.evaluate(async () => {
+    const api = (globalThis as unknown as { orchestrator: OrchestratorApi }).orchestrator
+    const jobs = await api.listJobs()
+    return (await api.getJobDetail(jobs[0]!.id)).sessions.map((session) => session.externalId)
+  })
+  expect(sessions).toEqual(['fixture-codex-thread-active'])
+  await harness.page.getByRole('button', { name: 'Activity', exact: true }).click()
+  await expect(
+    harness.page.getByRole('heading', { name: 'Recent Codex conversations' })
+  ).toBeVisible()
 })

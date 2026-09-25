@@ -1,0 +1,66 @@
+name: Bug report
+description: Report a reproducible problem in Codex Orchestrator.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Remove secrets, private source code, access tokens, and sensitive paths from logs before posting.
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      placeholder: v0.x.y or commit SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: codex
+    attributes:
+      label: Codex version
+      description: If the bug involves Codex integration.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Open...
+        2. Create...
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: state
+    attributes:
+      label: Job/session state
+      description: Include the lifecycle state, retry/wait state, or verification state if relevant.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted logs
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed credentials, tokens, private source code, and sensitive personal/project data.
+          required: true

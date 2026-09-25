@@ -79,6 +79,14 @@ The initial implementation change is documented under:
 openspec/changes/initial-desktop-orchestrator/
 ```
 
+Validate it with:
+
+```bash
+npm run openspec:validate
+```
+
+A ready-to-use Codex handoff prompt is stored at [docs/CODEX_IMPLEMENTATION_PROMPT.md](docs/CODEX_IMPLEMENTATION_PROMPT.md).
+
 Do not implement behavior that contradicts the active OpenSpec artifacts.
 
 ## Repository map

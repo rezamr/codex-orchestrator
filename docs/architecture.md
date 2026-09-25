@@ -6,6 +6,8 @@ Codex Orchestrator uses a layered desktop architecture with a privileged Electro
 
 The orchestration engine is the product core. Vue is a presentation client of that core; Codex is one provider behind an adapter.
 
+The boxes below are logical responsibilities, not separate processes or services. In this alpha, most orchestration behavior is implemented by the main-process `Orchestrator` and its application/infrastructure adapters.
+
 ## High-level view
 
 ```text
@@ -47,11 +49,13 @@ The orchestration engine is the product core. Vue is a presentation client of th
 ### Renderer
 
 The renderer may:
+
 - render state,
 - request allowed application operations through the preload bridge,
 - subscribe to sanitized state/event updates.
 
 The renderer must not:
+
 - spawn processes,
 - access filesystem APIs directly,
 - execute shell commands,
@@ -66,6 +70,7 @@ The preload layer exposes a small, typed API. It is an anti-corruption boundary,
 ### Main process
 
 The main process owns:
+
 - process supervision,
 - state machines,
 - persistence,
@@ -121,6 +126,7 @@ A process exit is an event, not a completion state.
 ## Attempts
 
 Each provider start/resume operation creates an Attempt so the history can answer:
+
 - what was sent,
 - when it began,
 - which provider session it used,
@@ -136,9 +142,12 @@ The orchestration engine consumes a provider-neutral interface conceptually simi
 
 ```ts
 interface AgentProvider {
-  probe(): Promise<ProviderCapabilities>
+  probe(): Promise<ProviderStatus>
   connect(): Promise<void>
   disconnect(): Promise<void>
+  readAccountSnapshot(): Promise<CodexAccountSnapshot>
+  listThreads(): Promise<CodexThreadIndex>
+  readThread(threadId: string): Promise<CodexThreadDetail>
   start(request: StartRequest): Promise<SessionRef>
   resume(request: ResumeRequest): Promise<SessionRef>
   interrupt(session: SessionRef): Promise<void>
@@ -149,9 +158,16 @@ interface AgentProvider {
 
 Exact interfaces may evolve during implementation, but domain code must not depend on raw app-server messages.
 
+### Read-only Codex account and history
+
+The Codex adapter owns automatic CLI discovery, app-server JSON-RPC, and normalization of account, usage, rate-limit, and thread data. Settings can request a read-only account snapshot; History lists active and archived thread summaries using `useStateDbOnly: true` and loads a selected thread with `thread/read(includeTurns: true)`. The thread index is bounded at 20,000 records and the transcript projection is bounded for renderer transport. Both surfaces report unavailable/truncated data rather than hiding failures. Account email and authentication material are excluded. Transcripts are returned to the current renderer view on demand and are not stored in SQLite.
+
+The old user-entered executable override is removed by migration 3. The renderer cannot set a CLI path; the main process searches the supported per-user Codex CLI install and then `PATH` (Windows), or resolves `codex` on `PATH` (macOS/Linux). It validates executable naming before probing, uses `--version` to reject stale/unlaunchable candidates, and never launches the ChatGPT GUI executable or enumerates protected Windows app packages.
+
 ## Event normalization
 
 Provider-specific events are translated into stable application events such as:
+
 - session.started,
 - turn.started,
 - activity,
@@ -172,6 +188,7 @@ Raw payloads may be retained selectively for diagnostics but should not become U
 SQLite is the durable state store.
 
 Requirements:
+
 - schema migrations,
 - transactions for state + schedule changes,
 - UTC timestamps internally,
@@ -187,6 +204,7 @@ The application must be able to reconstruct the current normalized job state fro
 Timers are derived from persisted schedules.
 
 At startup:
+
 1. load due/pending schedules,
 2. discard or reconcile obsolete entries,
 3. execute overdue actions only after checking current job state,
@@ -199,6 +217,7 @@ The timer is never the source of truth.
 Recovery treats all previously running child processes as unknown until proven otherwise.
 
 Rules:
+
 - do not blindly start a second provider session,
 - reconnect/resume only when provider capability and persisted state support it,
 - convert uncertain cases to a visible review state,
@@ -209,6 +228,7 @@ Rules:
 Verification runs after a provider signals a candidate completion or when the user manually requests verification.
 
 A policy may require several checks. Store:
+
 - command,
 - working directory,
 - start/end time,
@@ -224,6 +244,7 @@ Power actions depend on final verification outcome, not only provider text.
 OS-specific modules expose capability queries and safe operations. Unsupported capabilities are explicit.
 
 Examples:
+
 - prevent sleep,
 - release sleep block,
 - sleep,
@@ -236,6 +257,7 @@ Examples:
 ## Concurrency
 
 Concurrency is policy-driven:
+
 - global max active jobs,
 - optional per-project exclusivity,
 - no disruptive power action while another protected job is active,
@@ -246,6 +268,7 @@ Concurrency is policy-driven:
 Do not collapse all errors into “failed.”
 
 Minimum categories:
+
 - configuration,
 - authentication,
 - provider unavailable,
@@ -262,6 +285,7 @@ Minimum categories:
 ## Testing architecture
 
 Prioritize deterministic tests of:
+
 - state transition tables,
 - scheduler/restart behavior with fake clocks,
 - retry/backoff,

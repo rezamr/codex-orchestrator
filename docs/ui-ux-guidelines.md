@@ -36,6 +36,12 @@ Primary navigation:
 
 Diagnostics may live under Settings or an advanced area.
 
+### Codex connection and history
+
+Settings must describe automatic CLI discovery and show the detected CLI only as read-only diagnostic information; never ask the user to browse for the Codex GUI executable. Connection results distinguish provider availability from authentication status and explain when usage data is unavailable.
+
+History & sessions must visually distinguish local Codex conversations from Orchestrator jobs. Show active/archived state and metadata, support search over the retrieved index, and load a selected transcript on demand. Make read-only behavior and any safe retrieval limit clear. Do not provide history actions that silently resume, archive, delete, or mutate Codex sessions.
+
 ## Dashboard
 
 The first screen should answer:
@@ -53,6 +59,7 @@ Prefer a compact operational summary over decorative KPI cards.
 ## Job detail
 
 Job detail should contain:
+
 - objective,
 - state,
 - project,
@@ -70,6 +77,7 @@ The timeline should distinguish model activity, commands, application decisions,
 ## State presentation
 
 Every state has:
+
 - stable text label,
 - icon/symbol,
 - optional restrained semantic color,
@@ -78,6 +86,7 @@ Every state has:
 Never rely on color alone.
 
 Example labels:
+
 - Running
 - Waiting for approval
 - Waiting for usage reset
@@ -99,6 +108,7 @@ Defaults must never silently enable shutdown/hibernate.
 ## Power actions
 
 Power actions require especially clear UX:
+
 - explicit selection,
 - summary before task start,
 - prominent countdown when eligible,
@@ -108,6 +118,7 @@ Power actions require especially clear UX:
 ## Error UX
 
 Errors should contain:
+
 - what happened,
 - what the application knows,
 - whether work is safe,
@@ -139,6 +150,7 @@ Empty states should teach the next action with one clear primary CTA. Do not fil
 Do not confirm routine reversible actions.
 
 Do confirm or gate:
+
 - cancelling active work when it may lose progress,
 - deleting local history,
 - changing a policy that can interrupt work,
@@ -147,6 +159,7 @@ Do confirm or gate:
 ## Design system
 
 Implementation should create shared:
+
 - spacing tokens,
 - typography tokens,
 - semantic color tokens,

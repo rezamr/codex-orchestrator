@@ -75,6 +75,7 @@ A durable Job is not the same thing as an execution Attempt. A job can span seve
 Persist all important lifecycle state before externally visible/irreversible actions.
 
 Implement:
+
 - projects,
 - jobs,
 - queue,
@@ -92,6 +93,7 @@ Use UTC internally for durable timestamps and format in the UI for the user's lo
 ## Codex connection
 
 Implement:
+
 - executable discovery and manual path selection,
 - version/capability probing,
 - app-server process supervision,
@@ -112,6 +114,7 @@ If app-server behavior/version has changed from the documentation written in thi
 Do not try to bypass provider limits.
 
 When a usage/rate limit prevents work:
+
 - enter the dedicated waiting state,
 - record the evidence,
 - prefer structured reset/retry metadata if officially exposed,
@@ -129,6 +132,7 @@ A scheduled action must re-check current state before doing anything.
 ## Crash/restart recovery
 
 On application restart:
+
 - migrate/open the database,
 - load unfinished jobs and due schedules,
 - do not assume old child processes still exist,
@@ -144,6 +148,7 @@ Write deterministic recovery tests.
 A provider saying “done” is only candidate completion when verification is configured.
 
 Implement visible configurable checks for relevant:
+
 - tests,
 - typecheck,
 - lint,
@@ -162,6 +167,7 @@ A failed or incomplete verification prevents disruptive post-completion power ac
 Implement power behavior behind platform adapters.
 
 Support the conceptual operations specified in the repo:
+
 - prevent sleep while protected work is active,
 - sleep,
 - hibernate,
@@ -174,6 +180,7 @@ Windows reliability is the first priority, but preserve clean macOS/Linux interf
 Never promise reliable wake from sleep/hibernate unless you can verify a supported platform mechanism.
 
 Power actions require:
+
 - explicit user opt-in,
 - successfully completed job,
 - required verification passed,
@@ -192,6 +199,7 @@ Power actions require:
 Build a real desktop product, not a developer-only dashboard.
 
 Required areas:
+
 - Dashboard
 - Projects
 - New Job
@@ -204,6 +212,7 @@ Required areas:
 Use progressive disclosure for advanced options.
 
 The design must be calm, professional, restrained, and accessible:
+
 - neutral surfaces,
 - one restrained accent,
 - semantic status colors only,
@@ -233,6 +242,7 @@ Power-action UI must be especially explicit and impossible to confuse.
 Follow `docs/security-model.md` and all security requirements in OpenSpec.
 
 At minimum:
+
 - contextIsolation enabled,
 - renderer Node integration disabled,
 - strict navigation/window policy,
@@ -253,6 +263,7 @@ Use typed errors and a useful error taxonomy rather than collapsing everything i
 Do not rely only on manual testing.
 
 Implement:
+
 - unit tests for state transitions and policy logic,
 - scheduler tests with fake time,
 - retry/limit tests,
@@ -269,6 +280,7 @@ Real Codex connectivity may have a separate explicit smoke-test path. Automated 
 ## Public repository quality
 
 Keep the repository suitable for public contributors:
+
 - clean module boundaries,
 - meaningful names,
 - no machine-specific absolute paths,
@@ -286,6 +298,7 @@ Do not delete or weaken existing documentation merely to fit an implementation s
 Do not stop after scaffolding or after the UI appears.
 
 The change is complete only after:
+
 1. all required OpenSpec tasks are completed truthfully;
 2. every delta-spec scenario is implemented or explicitly proven unsupported with the spec corrected first;
 3. typecheck passes;

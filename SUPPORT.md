@@ -11,6 +11,7 @@ Codex Orchestrator is a community open-source project.
 - integration regressions.
 
 Before filing a bug, include:
+
 - application version/commit,
 - operating system,
 - Codex version,

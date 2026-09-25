@@ -5,6 +5,7 @@ Thanks for helping improve Codex Orchestrator.
 ## Before opening code
 
 For substantial changes, start with the specification. Read:
+
 - `AGENTS.md`
 - `docs/product-requirements.md`
 - `docs/architecture.md`
@@ -18,6 +19,7 @@ If the requested behavior is new or changes an existing behavior contract, creat
 - Keep privileged OS operations in the Electron main process.
 - Prefer typed IPC contracts and schema validation.
 - Add tests for state transitions, retries, recovery, verification, and power-action guards.
+- Keep Codex discovery automatic and provider-specific protocol code behind the provider abstraction. Do not add ChatGPT GUI automation, credential copying, or transcript persistence.
 - Do not weaken security or safety checks to make tests pass.
 - Keep changes focused and reviewable.
 - Update docs and `CHANGELOG.md` with user-visible changes.
@@ -25,6 +27,7 @@ If the requested behavior is new or changes an existing behavior contract, creat
 ## Pull requests
 
 A pull request should include:
+
 - the problem and intended behavior,
 - the related OpenSpec change,
 - implementation summary,
@@ -53,3 +56,7 @@ Follow `docs/ui-ux-guidelines.md`. New UI should be restrained, accessible, and 
 ## Security reports
 
 Do not open public issues for exploitable vulnerabilities. Follow `SECURITY.md`.
+
+## Live-provider checks
+
+The default unit, integration, and Electron E2E suites use deterministic fixtures and simulated power. An opt-in live Codex compatibility test can be run with `CODEX_ORCHESTRATOR_LIVE_CODEX_TEST=1 npm exec -- vitest run tests/integration/codex-live-readonly.test.ts`; it reads only supported account, usage, and thread history data from the locally installed Codex app-server. It does not start or resume a Codex turn. Never capture or attach account identifiers, conversation content, tokens, or machine-specific paths to test reports.

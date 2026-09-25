@@ -3,6 +3,7 @@
 The preload layer is the narrow typed bridge between renderer and main.
 
 Rules:
+
 - context isolation remains enabled,
 - expose explicit operations rather than generic IPC/send/execute primitives,
 - no arbitrary filesystem or shell access,

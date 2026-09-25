@@ -3,6 +3,7 @@
 This directory will contain the privileged Electron application core.
 
 Planned boundaries:
+
 - `domain/` — provider-neutral states, entities, events, policies.
 - `application/` — orchestration use cases and services.
 - `infrastructure/database/` — SQLite and migrations.

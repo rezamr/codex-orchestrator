@@ -11,6 +11,7 @@ Please avoid publishing exploitable security details in a public issue. Use GitH
 ## Security model
 
 Codex Orchestrator is a privileged desktop application. It may:
+
 - access user-selected project directories,
 - launch and communicate with local Codex processes,
 - execute configured verification commands,
@@ -27,7 +28,10 @@ Because of this privilege boundary:
 - IPC inputs must be validated.
 - Shell command construction must avoid unsafe string concatenation.
 - Secrets must never be persisted in plaintext application logs.
+- Codex CLI discovery must not launch `ChatGPT.exe` or enumerate protected Windows app packages. The app-server remains the owner of authentication.
+- Account checks must not expose account email or credential material. Thread history is read through supported app-server APIs, uses state-database-only listing, and does not copy transcripts into the orchestration database.
 - Power actions must be explicit, guarded, cancellable, and auditable.
+- Automated checks must use simulated power; they must never execute real sleep, hibernate, restart, or shutdown actions.
 - Remote content must never receive privileged Electron capabilities.
 
 See `docs/security-model.md` for the detailed threat model.

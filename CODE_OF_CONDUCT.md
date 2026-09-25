@@ -3,6 +3,7 @@
 We want this project to be useful, technical, and welcoming.
 
 Contributors are expected to:
+
 - discuss ideas and code rather than attacking people,
 - give specific, actionable review feedback,
 - respect differing levels of experience,

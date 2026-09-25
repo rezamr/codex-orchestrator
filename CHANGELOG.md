@@ -1,29 +1,43 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable user-facing changes are recorded here. The project follows Semantic Versioning after its first stable release.
 
-The project follows [Semantic Versioning](https://semver.org/) once the first public release is cut. During pre-alpha development, entries remain under **Unreleased**.
-
-## [Unreleased]
+## [0.1.0-alpha.0] - 2026-09-25
 
 ### Added
 
-- Initial open-source repository foundation.
-- Product requirements and architecture documentation.
-- OpenSpec configuration and initial implementation change.
-- Contributor, security, support, and release guidance.
-- Architecture Decision Records (ADRs).
-- GitHub issue and pull-request templates.
-- Specification for Codex app-server integration, orchestration, recovery, verification, and safe system power actions.
-
-### Changed
-
-- Expanded the initial one-line README into the project landing documentation.
+- Electron desktop application with a Vue 3 + TypeScript interface for projects, durable jobs, activity, history, schedules, settings, and diagnostics.
+- Codex app-server provider with automatic Codex CLI discovery and version checking; users no longer browse for or launch the ChatGPT desktop executable.
+- Read-only account mode, plan, usage/rate-limit summaries, and paginated active/archived Codex thread history. A selected thread is read without resuming it, and transcript content is not copied into the orchestration database.
+- Provider abstraction, deterministic fake provider, explicit job/attempt/session lifecycle, approval and input waits, bounded retries, persisted schedules, and crash/restart recovery.
+- Verification checks and retained evidence, structured/redacted logs, desktop notifications, and redacted diagnostic export.
+- Guarded, cancellable post-completion power-action countdowns and sleep prevention behind platform adapters; development and tests use simulated power behavior.
+- SQLite migrations, Windows CI, Electron E2E tests, Windows NSIS and portable packaging targets, and OpenSpec specs/tasks.
 
 ### Security
 
-- Established local-first, least-privilege, explicit-consent, and safe-power-action requirements.
+- Removed user-selected executable paths and added a migration that clears the obsolete stored `ChatGPT.exe` override.
+- Renderer privileges remain limited to a narrow validated IPC bridge. Credentials stay with Codex; account email, tokens, cookies, and raw provider payloads are not exposed or stored by Orchestrator.
+- Codex history list calls use state-database-only reads; viewing a transcript does not resume or mutate a conversation.
+- Automated tests never execute real machine sleep, hibernate, restart, or shutdown actions.
+
+### Reliability
+
+- Durable lifecycle records, bounded retry/resume policy, same-session continuation where supported, duplicate-work protection, and conservative recovery states.
+- Provider history pagination and transcript payloads have explicit bounds; the UI signals when the history index reaches its configured bound.
+- Current verified checks include strict OpenSpec validation, TypeScript typecheck, lint, unit/integration tests, Electron E2E tests, migration tests, production build, and an opt-in read-only live app-server compatibility test.
+
+### Packaging
+
+- Electron-builder configuration for Windows NSIS installer and portable executable, plus macOS DMG and Linux AppImage targets. Windows is the current CI platform. Artifacts are unsigned in this alpha.
+
+### Known limitations
+
+- The current OpenSpec change remains open for controlled manual power-action testing on a sacrificial machine (task 13.6). No real power action has been executed in development or automated tests.
+- Windows native sleep/hibernate/shutdown/restart actions are implemented but not manually validated; disruptive actions are disabled by default. macOS/Linux disruptive actions and automatic wake scheduling are unsupported.
+- No controlled usage-consuming Codex engineering turn has been tested. Live Codex checks are read-only and do not bypass provider limits or authentication.
+- Current CI runs on Windows; package targets for macOS/Linux are not represented as validated platforms. Packages are unsigned and database downgrade is unsupported.
 
 ## Release policy
 
-Every release must update this changelog with user-visible changes, migration notes, known limitations, and security-impacting behavior.
+Every release must document user-visible changes, migration notes, known limitations, and security-impacting behavior. Do not mark the real power-action gate complete until the controlled manual checklist is performed.

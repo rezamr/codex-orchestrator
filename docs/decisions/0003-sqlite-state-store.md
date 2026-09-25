@@ -16,4 +16,5 @@ Use SQLite through a repository layer and explicit migrations.
 - Local-first operation with transactional updates.
 - Scheduler and recovery can use durable queries.
 - Schema migration discipline is required.
+- Migration 3 removes the obsolete manually configured Codex executable path; provider discovery is automatic.
 - SQLite is not a credential store.

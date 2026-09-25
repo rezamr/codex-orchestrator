@@ -1,7 +1,7 @@
 name: Feature request
 description: Propose a product capability or behavior change.
-title: "[Feature]: "
-labels: ["enhancement"]
+title: '[Feature]: '
+labels: ['enhancement']
 body:
   - type: textarea
     id: problem

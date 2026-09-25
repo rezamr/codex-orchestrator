@@ -2,7 +2,7 @@ name: OpenSpec
 
 on:
   push:
-    branches: ["main"]
+    branches: ['main']
   pull_request:
   workflow_dispatch:
 
@@ -21,7 +21,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20.19.0"
+          node-version: '20.19.0'
 
       - name: Validate OpenSpec
         run: npx -y @fission-ai/openspec@latest validate --all --strict --no-interactive

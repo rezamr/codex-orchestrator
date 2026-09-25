@@ -5,7 +5,7 @@
 - Node.js compatible with `package.json#engines`
 - npm
 - Git
-- Codex installed for real-provider integration testing
+- Codex installed only when you want to run the opt-in live read-only integration check
 - OpenSpec CLI, invoked through the repository npm scripts or npx
 
 ## Specification first
@@ -21,23 +21,21 @@ Read the active change under `openspec/changes/`.
 
 Codex uses OpenSpec skills generated into `.agents/skills/`.
 
-## Intended stack
+## Implemented stack
 
 - Electron
 - Vue 3
 - TypeScript
 - electron-vite
-- Pinia or an equally small renderer state layer if justified
-- SQLite through a maintained local driver
-- schema validation for IPC/persisted configuration
-- Vitest for unit/integration tests
-- Playwright or an appropriate Electron E2E harness for critical desktop flows
-
-Exact package choices/versions should be selected during implementation based on current maintained releases and compatibility.
+- Pinia renderer state
+- SQLite through `better-sqlite3`
+- Zod validation at IPC boundaries
+- Vitest unit/integration tests
+- Playwright Electron E2E tests
 
 ## Development commands
 
-The repository reserves these scripts:
+The repository provides these scripts:
 
 ```bash
 npm run dev
@@ -45,10 +43,15 @@ npm run build
 npm run typecheck
 npm run lint
 npm test
+npm run test:unit
+npm run test:integration
+npm run test:e2e
+npm run test:all
+npm run package
 npm run format
 ```
 
-The implementation change must make these scripts functional.
+`npm run package` produces an unsigned unpacked artifact. It does not launch the application or execute a power action.
 
 ## Development safety
 
@@ -61,6 +64,7 @@ Do not use a production OpenAI/Codex account test as the only way to validate or
 ## Database changes
 
 Every schema change requires:
+
 - numbered migration,
 - forward migration test,
 - representative upgrade test,
@@ -81,6 +85,7 @@ SQLite repositories, scheduler with fake time, provider process protocol fixture
 ### E2E
 
 Critical GUI flows:
+
 - launch,
 - create project,
 - create job,
@@ -92,7 +97,23 @@ Critical GUI flows:
 
 ### Manual platform tests
 
-Real power actions and real Codex connectivity belong to explicit manual checklists, not ordinary automated CI.
+The default tests use provider fixtures and simulated power; they must not invoke real machine power commands or a usage-consuming Codex turn. A separate opt-in read-only Codex compatibility test is available for maintainers with an installed CLI:
+
+```powershell
+$env:CODEX_ORCHESTRATOR_LIVE_CODEX_TEST = '1'
+npm exec -- vitest run tests/integration/codex-live-readonly.test.ts
+```
+
+It reads account/usage summaries and local conversation history without forcing token refresh, resuming a thread, or starting a turn. It must not run in ordinary CI and its output must never include returned account or conversation content. Real usage-consuming Codex turns and real power actions require the controlled procedures in `manual-testing.md`; power tests require a sacrificial Windows machine with no unsaved work.
+
+Follow the full [controlled manual test checklist](manual-testing.md).
+
+## Safe runtime modes
+
+- `npm run dev`, Vitest, and Playwright always construct `FakePowerAdapter`.
+- An unpackaged Electron run cannot execute native power commands.
+- A packaged Windows build still requires the global Settings opt-in and an explicit per-job action; the default action is `none`.
+- Do not add environment-variable shortcuts that weaken provider authentication, approvals, billing, usage limits, or power guards.
 
 ## Logging
 
@@ -101,6 +122,7 @@ Use structured logging and redaction from day one. Do not add temporary logs tha
 ## Pull request readiness
 
 Run:
+
 - typecheck,
 - lint,
 - tests,

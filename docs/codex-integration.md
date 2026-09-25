@@ -12,7 +12,7 @@ Because this integration surface may evolve, all raw protocol handling stays ins
 
 ## Responsibilities of the Codex provider
 
-- discover configured/installed Codex executable,
+- automatically discover and version-check the installed Codex CLI,
 - report version and capabilities,
 - start and supervise the local app-server process,
 - perform protocol initialization/handshake,
@@ -25,6 +25,7 @@ Because this integration surface may evolve, all raw protocol handling stays ins
 - respond to approvals,
 - classify errors,
 - expose health/reconnect state,
+- read account, usage/rate-limit, and saved-thread data through read-only methods,
 - shut down cleanly.
 
 ## Authentication
@@ -32,22 +33,29 @@ Because this integration surface may evolve, all raw protocol handling stays ins
 The application should prefer authentication supported by the installed Codex environment.
 
 Rules:
+
 - do not copy or persist ChatGPT/OpenAI credentials into SQLite,
 - do not print tokens in logs,
 - do not invent an unofficial authentication flow,
 - expose authentication state and remediation instructions to the user,
 - keep API-key-based providers separate from local-account-based operation if API mode is added later.
 
+Connection checks call `account/read` with `refreshToken: false`. The UI receives only a safe auth mode, plan/status, rate-limit windows, and token-activity summaries; account email and credentials are omitted. The integration does not call login/logout, billing, reset-credit, or usage-limit mutation methods.
+
+## Automatic CLI discovery
+
+The user does not browse for an executable. On Windows the main process checks the per-user Codex CLI installation location under the `LOCALAPPDATA` environment value and then candidates from `where.exe codex.exe`; on macOS/Linux it resolves `codex` with `which`. Candidate names must be the Codex CLI executable (`codex.exe` on Windows, `codex` elsewhere), so a GUI executable such as `ChatGPT.exe` is never accepted. Each candidate is probed with `--version`, and discovery continues when a stale/unlaunchable candidate fails. A SQLite migration removes the obsolete stored manual override from earlier builds. Protected Windows app packages are not inspected.
+
 ## Process supervision
 
-The provider process manager must track:
+The provider supervises the process for the lifetime of the operation and tracks:
+
 - executable path,
 - spawned PID for the current app instance,
 - stdout/stderr transport as required by the protocol,
-- startup timeout,
+- bounded JSON-RPC request timeout,
 - protocol-ready state,
 - exit code/signal,
-- restart count,
 - last failure.
 
 A child process exit must be classified. It does not automatically mean a task completed or failed permanently.
@@ -57,6 +65,7 @@ A child process exit must be classified. It does not automatically mean a task c
 Raw protocol messages must not flow directly into Vue stores.
 
 Use:
+
 ```text
 app-server message
   -> protocol decoder
@@ -69,9 +78,10 @@ app-server message
 
 ## Capability probing
 
-At connection time, detect and persist/display:
+At connection time, detect and display:
+
 - Codex found/not found,
-- executable path selected by user or discovered,
+- executable path discovered by the application,
 - version,
 - app-server launch success,
 - authentication/connection readiness,
@@ -79,11 +89,14 @@ At connection time, detect and persist/display:
 
 Avoid hard-coding assumptions where capability probing is possible.
 
+The Settings action performs a temporary connection check and closes the app-server afterward. Its status means that the local CLI/app-server was available for the check, not that Orchestrator keeps a background Codex connection open between jobs.
+
 ## Session continuity
 
 The job stores an opaque provider session/thread reference when available.
 
 On resume:
+
 1. validate that the job is in a resumable state,
 2. load original objective and last known provider/session state,
 3. reconnect provider if necessary,
@@ -113,6 +126,7 @@ The original objective remains immutable job metadata. Continuation text is not 
 Do not assume every limit has a machine-readable reset timestamp.
 
 Classify evidence in descending confidence:
+
 1. structured provider retry/reset metadata,
 2. documented protocol error fields,
 3. conservative parsing of a human-readable provider message,
@@ -120,6 +134,7 @@ Classify evidence in descending confidence:
 5. bounded fallback retry schedule.
 
 Store:
+
 - detected category,
 - source,
 - raw redacted evidence,
@@ -148,6 +163,20 @@ Future MCP integration may expose third-party tools, project services, or intern
 - Keep provider protocol fixtures for regression tests.
 - Prefer feature/capability checks to version-only branching.
 - Keep an escape hatch for a future official SDK/provider without rewriting domain logic.
+
+## Implemented protocol profile
+
+The provider uses the documented newline-delimited JSON app-server transport over stdio. It sends `initialize` followed by `initialized`, reads account state, and uses `thread/start`, `thread/resume`, `turn/start`, and `turn/interrupt`. It also reads `account/rateLimits/read`, `account/usage/read`, paginated `thread/list`, and on-demand `thread/read` without resuming a stored thread. Thread listing requests `useStateDbOnly: true` to avoid app-server scan-and-repair behavior. Server-initiated command, file-change, and user-input approval requests are persisted and answered through their original request IDs.
+
+The adapter starts Codex with `app-server --stdio`, `approvalPolicy: on-request`, and the provider-owned `workspace-write` sandbox. It never reads or stores ChatGPT/OpenAI authentication material. A missing or signed-out Codex installation becomes an explicit provider/error or authentication-required state.
+
+Compatibility verified in automated tests:
+
+- deterministic JSONL child-process fixture covering handshake, start, resume, interrupt, approval response, account/usage reads, thread pagination, and no-resume transcript reads;
+- automatic CLI discovery and `--version` probe against the installed Codex CLI on 2026-09-25;
+- opt-in live read-only app-server check on 2026-09-25, covering account/usage, thread listing, and selected-thread read without starting or resuming a turn.
+
+Not yet claimed: a completed real-account turn. That remains an explicit controlled release test because it consumes account usage and may require interactive authentication/approval.
 
 ## References
 

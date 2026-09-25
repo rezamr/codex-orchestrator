@@ -39,6 +39,8 @@ Do not archive a change while required tests, verification checks, or documentat
 - Keep orchestration logic UI-independent.
 - Place Codex-specific logic behind a provider interface.
 - Primary local provider: Codex app-server.
+- Discover and version-check the supported Codex CLI automatically. Never ask users to select or launch the ChatGPT GUI executable, and never inspect protected Windows app packages.
+- Keep account/usage/history reads read-only. Do not persist account email, authentication material, or Codex transcripts in Orchestrator's SQLite database; request state-database-only thread listings to avoid scan-and-repair side effects.
 - Never control Codex by scraping its UI or simulating mouse/keyboard input.
 - Persist durable task state in SQLite behind a repository/service abstraction.
 - Design migrations before relying on persisted schema.
@@ -52,6 +54,7 @@ Do not archive a change while required tests, verification checks, or documentat
 A task is not complete merely because the model says it is complete.
 
 Where configured, completion requires machine-verifiable evidence such as:
+
 - successful test command(s),
 - expected build/typecheck/lint results,
 - absence of unresolved approval requests,
@@ -87,6 +90,7 @@ Verification results must be retained with the job history.
 The interface must be calm, professional, and information-dense without becoming visually noisy.
 
 Avoid:
+
 - rainbow palettes,
 - excessive gradients,
 - oversized decorative cards,
@@ -95,6 +99,7 @@ Avoid:
 - using color as the only status signal.
 
 Prefer:
+
 - neutral surfaces,
 - one restrained accent,
 - semantic status colors only where needed,
@@ -108,6 +113,7 @@ Prefer:
 ## Engineering quality
 
 Before declaring work complete:
+
 1. Typecheck.
 2. Lint.
 3. Run relevant unit/integration tests.
@@ -115,5 +121,7 @@ Before declaring work complete:
 5. Update documentation and CHANGELOG when user-visible behavior changes.
 6. Verify no generated secrets or machine-specific paths were committed.
 7. Update OpenSpec tasks and verification evidence.
+
+An opt-in live Codex compatibility test may use the already-installed CLI and local account only for read-only app-server methods. It must never consume reset credits or start a real Codex turn. Do not enable it in ordinary CI.
 
 Prefer small modules, typed contracts, dependency inversion, deterministic tests, and explicit error handling over clever abstractions.

@@ -6,6 +6,12 @@
 
 The product exists to let a user start a task, observe it, safely leave it unattended, recover from expected interruptions, verify the result, and optionally perform a configured system action after successful completion.
 
+## Current alpha status
+
+The current `0.1.0-alpha.0` implementation includes the desktop project/job workflow, fake and Codex app-server providers, automatic Codex CLI discovery, read-only account/usage/history views, durable jobs/schedules/recovery, verification, approvals, notifications, diagnostics, and simulated/guarded platform power adapters. Real Codex checks have been read-only; no usage-consuming turn or controlled real power-action test is claimed.
+
+The requirements below also record product intent. Reusable profiles, project-specific defaults, arbitrary user-authored scheduled jobs, third-party/MCP integrations, reliable wake scheduling, and non-Windows disruptive power actions are not implemented in this alpha unless explicitly stated otherwise.
+
 ## Goals
 
 1. Provide a first-class desktop GUI; normal use must not require a terminal.
@@ -18,11 +24,13 @@ The product exists to let a user start a task, observe it, safely leave it unatt
 8. Keep core orchestration provider-agnostic enough to survive changes in Codex integration surfaces.
 9. Default to local storage and least privilege.
 10. Be suitable for public use, contribution, and forking.
+11. Discover the supported Codex CLI automatically and expose current account/usage state and local conversation history through read-only app-server calls.
 
 ## Non-goals for the initial release
 
 - Replacing Codex itself.
 - Building a general-purpose remote desktop or mouse/keyboard automation tool.
+- Reading or modifying Codex's private GUI package data, bypassing its supported app-server interface, or taking ownership of its authentication.
 - Circumventing provider usage limits, access controls, billing, or authentication.
 - Automatically purchasing credits or changing account plans.
 - Executing destructive power actions without explicit user configuration and safety checks.
@@ -33,13 +41,14 @@ The product exists to let a user start a task, observe it, safely leave it unatt
 
 ### Start a job
 
-The user selects a project folder, enters an objective, chooses a provider/profile, configures verification and completion behavior, and starts the job.
+The user selects a project folder, enters an objective, chooses the provider, configures optional verification, bounded retry behavior, and a completion power policy, then starts the job. A reusable profile picker is not part of the current UI.
 
 The application persists the job before starting external work.
 
 ### Observe a job
 
 The dashboard shows:
+
 - current lifecycle state,
 - project and objective,
 - provider/session identity where available,
@@ -53,6 +62,7 @@ The dashboard shows:
 ### Usage-limit wait and resume
 
 When the provider indicates work cannot continue due to a usage/budget limit:
+
 - the job moves to a dedicated waiting state,
 - the reason is retained,
 - a reset/retry time is recorded if reliably available,
@@ -65,6 +75,7 @@ The product must not claim to bypass a limit; it waits until the provider permit
 ### Crash/restart recovery
 
 On application start:
+
 - unfinished durable jobs are loaded,
 - impossible/transient states are reconciled,
 - stale local child-process assumptions are discarded,
@@ -76,6 +87,7 @@ On application start:
 Before a job is considered successfully complete, configured checks run and their output/exit status is recorded.
 
 A job may finish as:
+
 - completed + verified,
 - completed + verification failed,
 - failed,
@@ -110,6 +122,14 @@ If configured, a disruptive power action is eligible only after successful verif
 - Resume durable sessions rather than starting duplicate work.
 - Treat provider identifiers as opaque values.
 - Keep a normalized event history independent of provider-specific payloads.
+- Make the local Codex thread index available as a read-only view; read selected thread turns on demand without resuming the thread or persisting its transcript in Orchestrator's database.
+
+### Codex discovery and account data
+
+- Discover and version-check the supported Codex CLI without requiring users to browse for a GUI executable.
+- Read available account/plan, rate-limit, and token-activity summaries without forcing token refresh or changing account state.
+- Paginate active and archived local Codex thread history through app-server, using state-database-only listing to avoid optional scan-and-repair side effects.
+- Omit email and credential material. Bound returned index/transcript payloads and indicate when a safety bound truncates results.
 
 ### Approvals and user input
 
@@ -129,6 +149,7 @@ If configured, a disruptive power action is eligible only after successful verif
 ### Verification
 
 Configurable checks may include:
+
 - test command,
 - typecheck,
 - lint,
@@ -143,6 +164,7 @@ Verification commands must be explicit and visible to the user.
 ### Notifications
 
 Notify on meaningful transitions such as:
+
 - needs approval/input,
 - rate-limit wait,
 - resumed,
@@ -196,9 +218,10 @@ Architecture must isolate OS-specific behavior. Initial implementation should pr
 ## Definition of done for v0.1
 
 The first usable release is complete when a user can:
+
 1. install and open the desktop app,
 2. register a project,
-3. connect to/detect local Codex,
+3. automatically detect the local Codex CLI and inspect current read-only account/history data,
 4. start a Codex job from the GUI,
 5. watch normalized progress,
 6. restart the app without losing durable job state,

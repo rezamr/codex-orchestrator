@@ -19,3 +19,4 @@ Development and automated testing use a simulated adapter by default.
 - Greatly reduced risk of surprise shutdowns.
 - Completion semantics must be explicit and testable.
 - Platform-specific capabilities and limitations must be surfaced to users.
+- Native Windows commands remain unverified on a controlled machine until the explicit manual gate is completed; fake-power tests do not close that gate.

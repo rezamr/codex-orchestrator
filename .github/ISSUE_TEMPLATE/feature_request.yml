@@ -1,0 +1,35 @@
+name: Feature request
+description: Propose a product capability or behavior change.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user problem should this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Desired behavior
+      description: Describe observable behavior, not only an implementation idea.
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Reliability / security / power implications
+      description: Note any unattended execution, credentials, process execution, filesystem, approvals, or power-management implications.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: spec
+    attributes:
+      label: Specification
+      options:
+        - label: I understand substantial behavior changes should be proposed through OpenSpec before implementation.
+          required: true

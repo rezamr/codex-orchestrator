@@ -1,0 +1,14 @@
+schema: spec-driven
+created: 2026-09-24
+goal: Build the first complete, safe, durable Electron desktop orchestrator for managing long-running Codex work.
+affected_areas:
+  - desktop-shell
+  - codex-provider
+  - orchestration-lifecycle
+  - retry-scheduling
+  - verification
+  - persistence-recovery
+  - power-management
+  - security-boundaries
+  - operator-ui
+  - notifications-diagnostics

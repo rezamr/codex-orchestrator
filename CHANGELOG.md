@@ -2,6 +2,28 @@
 
 All notable user-facing changes are recorded here. The project follows Semantic Versioning after its first stable release.
 
+## [0.1.0-alpha.2] - 2026-09-25
+
+### Fixed
+
+- Fix Windows `spawn EINVAL` during npm verification: resolve native Node and npm's CLI instead of executing a `.cmd` file with `execFile`. Resolution and synchronous launch errors now persist failed evidence and leave Verifying safely.
+- Add **Rerun checks only** for completed provider attempts, without repeating a Codex turn. Recover interrupted verification runs as failed evidence and reject duplicate runs.
+- Reject cancellation during active checks so workspace/concurrency protection is not released prematurely; the interface explains the bounded wait.
+- Replace token-by-token audit noise with authoritative completed agent messages.
+
+### Changed
+
+- Make new versus existing conversation targeting explicit, display the exact destination, and allow continuation directly from History. A new job saying “please continue” does not inherit another conversation's history.
+- Add **Open in ChatGPT** using the official OpenAI desktop thread deep link through a narrow, validated IPC operation. This opens the saved conversation but does not send a prompt or automate the UI.
+- Bump installer and portable application version to `0.1.0-alpha.2`; database schema remains version 3 with no data reset or new migration.
+- Add regression coverage for native npm launch, synchronous launch errors, checks-only retry/recovery, literal process arguments, continuation targeting, and desktop-link security.
+- Validation: strict OpenSpec, typecheck, lint, formatting, 55 unit/integration tests, 9 fake-provider/fake-power Electron E2E scenarios, production build, and Windows NSIS/portable packaging passed. The separate opt-in installed-Codex read-only test also passed; npm audit reported zero vulnerabilities. Installer execution and real desktop navigation remain manual checks.
+
+### Limitations
+
+- Desktop-link tests intercept OS launch; actual ChatGPT navigation remains a manual smoke check. Cross-client live refresh and exclusive ownership are not guaranteed.
+- A reported real turn exposed the Windows verification bug; it is not evidence that the complete controlled real-Codex release checklist passed. Real power-action validation remains outstanding and artifacts remain unsigned.
+
 ## [0.1.0-alpha.1] - 2026-09-25
 
 ### Changed

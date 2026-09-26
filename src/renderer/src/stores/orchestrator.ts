@@ -23,6 +23,7 @@ export const useOrchestratorStore = defineStore('orchestrator', () => {
   const codexConnection = ref<CodexConnectionSnapshot | null>(null)
   const codexThreads = ref<CodexThreadIndex | null>(null)
   const selectedCodexThread = ref<CodexThreadDetail | null>(null)
+  const continuationTarget = ref<string | null>(null)
   const diagnostics = ref<DiagnosticSnapshot | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -174,6 +175,10 @@ export const useOrchestratorStore = defineStore('orchestrator', () => {
     if (result) selectedCodexThread.value = result
   }
 
+  async function openCodexThread(threadId: string): Promise<void> {
+    await run(() => window.orchestrator.openCodexThread(threadId))
+  }
+
   async function loadDiagnostics(): Promise<void> {
     const result = await run(() => window.orchestrator.getDiagnostics())
     if (result) diagnostics.value = result
@@ -194,6 +199,7 @@ export const useOrchestratorStore = defineStore('orchestrator', () => {
     codexConnection,
     codexThreads,
     selectedCodexThread,
+    continuationTarget,
     jobs,
     projects,
     provider,
@@ -218,6 +224,7 @@ export const useOrchestratorStore = defineStore('orchestrator', () => {
     continueCodexThread,
     loadCodexThreads,
     selectCodexThread,
+    openCodexThread,
     loadDiagnostics
   }
 })

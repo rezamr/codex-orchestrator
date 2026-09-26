@@ -241,6 +241,10 @@ A policy may require several checks. Store:
 
 Power actions depend on final verification outcome, not only provider text.
 
+Windows npm/npx checks resolve native `node.exe` plus the associated npm JavaScript CLI entry point and keep `shell: false`; unsupported batch wrappers fail visibly. Resolution, asynchronous errors, and synchronous spawn failures all produce bounded failed evidence. Unexpected verification infrastructure failures transition to `NEEDS_REVIEW`. After a completed provider attempt, verification-only retry creates a new check run without a new provider attempt or turn. Concurrent verification is rejected and interrupted runs are marked failed during recovery.
+
+Conversation targeting is explicit in the job form and can originate from History. The typed desktop-open IPC accepts only a validated thread id, confirms saved metadata without resuming, and opens the canonical OpenAI-documented ChatGPT deep link. It never receives an arbitrary URL or prompt.
+
 ## Platform abstraction
 
 OS-specific modules expose capability queries and safe operations. Unsupported capabilities are explicit.

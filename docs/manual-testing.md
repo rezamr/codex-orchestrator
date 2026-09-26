@@ -4,6 +4,16 @@ Usage-consuming real Codex turns and real power actions are controlled release g
 
 For `0.1.0-alpha.1`, visually confirm after launch that Dashboard has a Codex conversation/workspace summary, Projects lists working folders discovered from conversations, Jobs lists eligible existing conversations, Activity lists recent Codex updates separately from job events, and History retains read-only transcript browsing. A **Continue** click is usage-consuming and must follow the controlled real-turn procedure below; do not click it during a read-only smoke test. The Automations page intentionally shows only Orchestrator-owned schedules.
 
+## Alpha.2 correction smoke checks
+
+- Select an existing conversation in History, choose Continue, and confirm the form shows that exact title, thread id, and workspace. Cancel the form; no turn should start.
+- Open a new job form and verify its destination explicitly says new conversation with no existing history. Merely typing “please continue” must not select another conversation.
+- On an existing local thread, choose Open in ChatGPT and confirm the same technical thread opens in the desktop app. This navigation must not submit a prompt. A missing app/protocol handler must produce a visible error.
+- In a disposable workspace with the fake provider, configure an npm check and confirm a failed launch ends in Verification Failed with evidence, never a stuck Verifying state. After a completed provider attempt, Rerun checks only must not add another Codex attempt.
+- Restart after interrupted verification: the job should require review, the old check run should no longer appear running, and checks-only retry should remain available for a completed provider attempt.
+
+These checks do not replace the controlled real-Codex or real-power procedures below.
+
 ## Record for every run
 
 - application version and commit;

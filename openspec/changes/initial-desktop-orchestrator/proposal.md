@@ -11,10 +11,12 @@ Codex Orchestrator needs a complete first implementation that can manage durable
 - Automatically discover and validate the supported Codex CLI executable; never treat the ChatGPT desktop GUI executable as the app-server binary.
 - Read and present connected Codex account state, current usage/limit summaries, and existing local Codex thread history through app-server without taking ownership of authentication.
 - Surface discovered Codex workspaces and conversations in Projects, Jobs, Dashboard, and Activity, with an explicit path to continue an existing conversation as a durable job.
+- Show the exact continuation destination and open saved conversations in ChatGPT desktop through the documented thread deep link, without sending a prompt or automating the UI.
 - Persist projects, jobs, attempts, sessions, schedules, events, settings, approvals, and verification evidence in SQLite.
 - Implement explicit lifecycle, retry, usage-limit waiting, resume, crash-recovery, and approval/input states.
 - Provide a professional, restrained, accessible desktop UI.
 - Verify candidate completion before declaring success.
+- Persist process-launch failures as verification evidence and allow verification-only retry without repeating provider work.
 - Support safe, opt-in sleep/hibernate/shutdown/restart behavior after verified completion.
 - Make normal operation GUI-first with no command prompt requirement.
 

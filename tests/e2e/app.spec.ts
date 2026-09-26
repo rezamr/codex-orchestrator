@@ -235,3 +235,149 @@ test('projects and jobs show connected Codex data and continue a saved conversat
     harness.page.getByRole('heading', { name: 'Recent Codex conversations' })
   ).toBeVisible()
 })
+
+test('continues the selected History conversation with its explicit identity', async () => {
+  const harness = await launch()
+  await harness.page.getByRole('button', { name: 'History & sessions', exact: true }).click()
+  await harness.page.getByText('Simulated Codex session', { exact: true }).click()
+  await harness.page
+    .getByRole('button', { name: 'Continue this conversation', exact: true })
+    .click()
+  await expect(
+    harness.page.getByRole('heading', { name: 'Continue Codex conversation' })
+  ).toBeVisible()
+  await expect(harness.page.getByLabel('Conversation destination')).toHaveValue(
+    'fixture-codex-thread-active'
+  )
+  await expect(harness.page.getByRole('button', { name: 'Close', exact: true })).toBeEnabled()
+  await expect(
+    harness.page.getByText('Continuing: Simulated Codex session', { exact: true })
+  ).toBeVisible()
+  const row = harness.page.locator('.conversation-row').first()
+  const rowBounds = await row.boundingBox()
+  const continueBounds = await row
+    .getByRole('button', { name: 'Continue', exact: true })
+    .boundingBox()
+  expect(rowBounds).not.toBeNull()
+  expect(continueBounds).not.toBeNull()
+  expect(continueBounds!.x + continueBounds!.width).toBeLessThanOrEqual(
+    rowBounds!.x + rowBounds!.width
+  )
+  await harness.page.screenshot({
+    path: test.info().outputPath('continuation-destination.png'),
+    fullPage: true
+  })
+  await harness.page.getByLabel('Objective').fill('Continue from the selected history')
+  await harness.page
+    .getByRole('button', { name: 'Continue this conversation', exact: true })
+    .click()
+  await expect(harness.page.getByText('Completed', { exact: true })).toBeVisible()
+  const result = await harness.page.evaluate(async () => {
+    const api = (globalThis as unknown as { orchestrator: OrchestratorApi }).orchestrator
+    const jobs = await api.listJobs()
+    return api.getJobDetail(jobs[0]!.id)
+  })
+  expect(result.attempts[0]?.kind).toBe('resume')
+  expect(result.sessions.map((session) => session.externalId)).toEqual([
+    'fixture-codex-thread-active'
+  ])
+})
+
+test('opens only a validated existing ChatGPT thread link without starting provider work', async () => {
+  const harness = await launch()
+  await harness.app.evaluate(({ shell }) => {
+    const state = globalThis as unknown as { openedThreadUrls: string[] }
+    state.openedThreadUrls = []
+    shell.openExternal = async (url: string) => {
+      state.openedThreadUrls.push(url)
+    }
+  })
+  await harness.page.evaluate(async () => {
+    const api = (globalThis as unknown as { orchestrator: OrchestratorApi }).orchestrator
+    // E2E overrides every provider factory to fake even with the Codex setting selected.
+    await api.updateSettings({ providerMode: 'codex' })
+    await api.openCodexThread('fixture-codex-thread-active')
+  })
+  expect(
+    await harness.app.evaluate(
+      () => (globalThis as unknown as { openedThreadUrls: string[] }).openedThreadUrls
+    )
+  ).toEqual(['codex://threads/fixture-codex-thread-active'])
+  const results = await harness.page.evaluate(async () => {
+    const api = (globalThis as unknown as { orchestrator: OrchestratorApi }).orchestrator
+    const outcomes = []
+    for (const id of [
+      'new',
+      '../settings',
+      'fixture-codex-thread-active?prompt=send',
+      'nonexistent-thread'
+    ]) {
+      try {
+        await api.openCodexThread(id)
+        outcomes.push(false)
+      } catch {
+        outcomes.push(true)
+      }
+    }
+    return { outcomes, jobs: await api.listJobs() }
+  })
+  expect(results.outcomes).toEqual([true, true, true, true])
+  expect(results.jobs).toHaveLength(0)
+  expect(
+    await harness.app.evaluate(
+      () => (globalThis as unknown as { openedThreadUrls: string[] }).openedThreadUrls
+    )
+  ).toHaveLength(1)
+})
+
+test('runs npm verification in Electron and exposes checks-only retry without another provider attempt', async () => {
+  const harness = await launch()
+  const projectId = await createProject(harness.page, harness.projectDirectory)
+  const npmJob = await createJob(harness.page, {
+    ...jobInput(projectId, 'Verify the native npm CLI launch'),
+    verification: [
+      {
+        id: 'npm',
+        kind: 'custom',
+        label: 'npm CLI version',
+        command: 'npm',
+        args: ['--version'],
+        required: true,
+        timeoutMs: 10_000
+      }
+    ]
+  })
+  await expect
+    .poll(async () => (await detail(harness.page, npmJob)).job.state, { timeout: 20_000 })
+    .toBe('COMPLETED')
+  expect((await detail(harness.page, npmJob)).verificationRuns[0]?.checks[0]?.output).toMatch(
+    /\d+\.\d+\.\d+/
+  )
+  const failed = await createJob(harness.page, {
+    ...jobInput(projectId, 'A missing verifier should not hang'),
+    verification: [
+      {
+        id: 'missing',
+        kind: 'custom',
+        label: 'Missing executable',
+        command: 'codex-orchestrator-no-such-verifier',
+        args: [],
+        required: true,
+        timeoutMs: 5_000
+      }
+    ]
+  })
+  await expect
+    .poll(async () => (await detail(harness.page, failed)).job.state)
+    .toBe('VERIFICATION_FAILED')
+  await harness.page.getByRole('button', { name: 'Jobs', exact: true }).click()
+  await harness.page.getByText('A missing verifier should not hang', { exact: true }).click()
+  await harness.page.getByRole('button', { name: 'Rerun checks only' }).click()
+  await expect
+    .poll(async () => (await detail(harness.page, failed)).verificationRuns.length)
+    .toBe(2)
+  await expect
+    .poll(async () => (await detail(harness.page, failed)).job.state)
+    .toBe('VERIFICATION_FAILED')
+  expect((await detail(harness.page, failed)).attempts).toHaveLength(1)
+})

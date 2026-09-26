@@ -21,6 +21,10 @@ const provider = ref<ProviderMode>('codex')
 onMounted(async () => {
   if (!store.settings) await store.loadSettings()
   provider.value = store.settings?.providerMode ?? 'codex'
+  if (store.continuationTarget) {
+    beginContinuation(store.continuationTarget)
+    store.continuationTarget = null
+  }
 })
 const powerAction = ref<PowerAction>('none')
 const maxAttempts = ref(3)
@@ -28,6 +32,18 @@ const selectedChecks = ref<VerificationKind[]>([])
 const customCommand = ref('')
 const customArgs = ref('')
 const continuingThreadId = ref<string | null>(null)
+const continuationThread = computed(() =>
+  store.codexThreads?.threads.find((thread) => thread.id === continuingThreadId.value)
+)
+const eligibleThreads = computed(() =>
+  (store.codexThreads?.threads ?? []).filter(
+    (thread) =>
+      !thread.archived &&
+      thread.cwd &&
+      !thread.managedJobId &&
+      !['active', 'running'].includes(thread.status ?? '')
+  )
+)
 const threadQuery = ref('')
 const visibleThreads = computed(() =>
   (store.codexThreads?.threads ?? [])
@@ -131,6 +147,7 @@ function beginContinuation(threadId: string): void {
 
 function toggleNewJob(): void {
   continuingThreadId.value = null
+  objective.value = ''
   creating.value = !creating.value
 }
 
@@ -157,7 +174,7 @@ function checkLabel(kind: VerificationKind): string {
       <button
         class="button primary"
         type="button"
-        :disabled="store.projects.length === 0"
+        :disabled="!creating && store.projects.length === 0"
         @click="toggleNewJob"
       >
         {{ creating ? 'Close' : 'New job' }}
@@ -172,10 +189,30 @@ function checkLabel(kind: VerificationKind): string {
             {{
               continuingThreadId
                 ? 'Your new instruction starts a turn in the existing Codex conversation after the job is persisted.'
-                : 'The job is persisted before provider work starts.'
+                : 'Starts a new conversation. It does not inherit another chat, even if you enter “please continue”. Select an existing conversation below to keep its history.'
             }}
           </p>
         </div>
+      </div>
+      <label>
+        <span>Conversation destination</span>
+        <select v-model="continuingThreadId">
+          <option :value="null">New conversation — no existing chat history</option>
+          <option v-for="thread in eligibleThreads" :key="thread.id" :value="thread.id">
+            {{ thread.name || thread.preview || thread.id }} · {{ thread.cwd }}
+          </option>
+        </select>
+      </label>
+      <div v-if="continuationThread" class="command-preview" role="status">
+        <strong
+          >Continuing:
+          {{
+            continuationThread.name || continuationThread.preview || 'Untitled conversation'
+          }}</strong
+        >
+        <code>{{ continuationThread.id }}</code>
+        <span>{{ continuationThread.cwd }}</span>
+        <small>Your instruction will be appended to this exact saved conversation.</small>
       </div>
       <div class="form-grid two">
         <label v-if="!continuingThreadId"
@@ -282,7 +319,7 @@ function checkLabel(kind: VerificationKind): string {
       </div>
     </form>
 
-    <section class="panel">
+    <section v-if="!continuingThreadId || store.jobs.length" class="panel">
       <EmptyState
         v-if="store.projects.length === 0"
         title="Add a project first"
@@ -347,8 +384,12 @@ function checkLabel(kind: VerificationKind): string {
         title="No active Codex conversations found"
         description="Check the Codex connection or open History for archived conversations."
       />
-      <div v-else class="data-list">
-        <article v-for="thread in visibleThreads" :key="thread.id" class="data-row static">
+      <div v-else class="data-list conversation-list">
+        <article
+          v-for="thread in visibleThreads"
+          :key="thread.id"
+          class="data-row static conversation-row"
+        >
           <div class="row-main">
             <strong>{{ thread.name || thread.preview || 'Untitled conversation' }}</strong
             ><span
@@ -364,24 +405,26 @@ function checkLabel(kind: VerificationKind): string {
               ? new Date(thread.updatedAt * 1000).toLocaleString()
               : 'Date unavailable'
           }}</span>
-          <button class="button" type="button" @click="inspect(thread.id)">Inspect</button>
-          <button
-            v-if="thread.managedJobId"
-            class="button"
-            type="button"
-            @click="emit('job', thread.managedJobId)"
-          >
-            Open job
-          </button>
-          <button
-            v-else
-            class="button primary"
-            type="button"
-            :disabled="!thread.cwd || thread.status === 'active' || thread.status === 'running'"
-            @click="beginContinuation(thread.id)"
-          >
-            Continue
-          </button>
+          <div class="conversation-actions">
+            <button class="button" type="button" @click="inspect(thread.id)">Inspect</button>
+            <button
+              v-if="thread.managedJobId"
+              class="button"
+              type="button"
+              @click="emit('job', thread.managedJobId)"
+            >
+              Open job
+            </button>
+            <button
+              v-else
+              class="button primary"
+              type="button"
+              :disabled="!thread.cwd || thread.status === 'active' || thread.status === 'running'"
+              @click="beginContinuation(thread.id)"
+            >
+              Continue
+            </button>
+          </div>
         </article>
       </div>
       <p class="provider-data-note">
@@ -391,3 +434,31 @@ function checkLabel(kind: VerificationKind): string {
     </section>
   </div>
 </template>
+
+<style scoped>
+.conversation-list {
+  margin-bottom: 0;
+}
+.conversation-row {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+.conversation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+@media (max-width: 1000px) {
+  .conversation-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .conversation-row .row-meta {
+    grid-column: 1;
+    text-align: left;
+  }
+  .conversation-actions {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
+</style>

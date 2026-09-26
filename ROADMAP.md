@@ -1,6 +1,13 @@
 # Roadmap
 
-This roadmap describes direction, not release dates. Completed capabilities refer to the current `0.1.0-alpha.1` implementation; they do not imply that every platform or real-world power action has been manually validated.
+This roadmap describes direction, not release dates. Completed capabilities refer to the current `0.1.0-alpha.2` implementation; they do not imply that every platform or real-world power action has been manually validated.
+
+## Added in `0.1.0-alpha.2`
+
+- Explicit new/existing conversation targeting and History continuation.
+- Official ChatGPT desktop thread deep-link navigation with narrow validated IPC.
+- Safe Windows npm verification, failed-launch evidence, and checks-only retry/recovery.
+- Readable completed-message audit entries rather than token-per-row noise.
 
 ## Implemented in `0.1.0-alpha.0`
 

@@ -2,6 +2,26 @@ import { describe, expect, it } from 'vitest'
 import { normalizeCodexNotification } from '@main/infrastructure/providers/codex/event-normalizer'
 
 describe('Codex app-server event normalization', () => {
+  it('records the authoritative completed agent message instead of separate token fragments', () => {
+    expect(
+      normalizeCodexNotification('item/agentMessage/delta', { itemId: 'm1', delta: 'hel' })
+    ).toEqual([])
+    expect(
+      normalizeCodexNotification('item/agentMessage/delta', { itemId: 'm1', delta: 'lo' })
+    ).toEqual([])
+    expect(
+      normalizeCodexNotification('item/started', {
+        item: { type: 'agentMessage', id: 'm1', text: '' }
+      })
+    ).toEqual([])
+    expect(
+      normalizeCodexNotification('item/completed', {
+        item: { type: 'agentMessage', id: 'm1', text: 'hello world' }
+      })
+    ).toEqual([
+      { type: 'activity', message: 'hello world', metadata: { itemType: 'agentMessage' } }
+    ])
+  })
   it('maps stable thread and turn notifications', () => {
     expect(normalizeCodexNotification('thread/started', { thread: { id: 'thr_1' } })).toEqual([
       { type: 'session.started', sessionId: 'thr_1' }

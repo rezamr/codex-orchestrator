@@ -94,7 +94,7 @@ export const openExternalSchema = z.object({
 
 export const lifecycleActionSchema = z.object({
   jobId: idSchema,
-  action: z.enum(['start', 'pause', 'resume', 'interrupt', 'cancel', 'retry', 'archive'])
+  action: z.enum(['start', 'pause', 'resume', 'interrupt', 'cancel', 'retry', 'verify', 'archive'])
 })
 
 export const selectDirectorySchema = z.object({

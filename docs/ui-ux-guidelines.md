@@ -105,6 +105,8 @@ Use progressive disclosure.
 
 A new job form should make the safe/common path easy while advanced retry, verification, and power policies remain expandable.
 
+Make the conversation destination explicit: a new conversation has no inherited chat history, while a continuation displays the exact saved title, thread ID, and workspace before submission. History offers the same continuation workflow. Keep desktop navigation separate from sending an instruction, and distinguish **Rerun checks only** from **Retry Codex work** so a failed verifier does not silently consume another provider turn.
+
 Defaults must never silently enable shutdown/hibernate.
 
 ## Power actions

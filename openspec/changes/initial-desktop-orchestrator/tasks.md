@@ -134,3 +134,11 @@
 - [x] 14.5 Allow an explicit user continuation of an eligible existing thread as one durable job on the same session, with duplicate, archived, path, and active-work guards.
 - [x] 14.6 Default new jobs to Codex, make the Automations scope truthful, and add deterministic end-to-end coverage for populated connected views and continuation.
 - [x] 14.7 Bump to `0.1.0-alpha.1`, update public documentation and changelog, validate/package the Windows installer and portable executable, and audit the repository before publication.
+
+## 15. Real-workflow correction from official OpenAI documentation
+
+- [x] 15.1 Make new versus existing conversation targeting explicit, including a direct History continuation workflow and visible destination identity.
+- [x] 15.2 Add a narrow validated Open in ChatGPT desktop action using the officially documented thread deep link, with security tests.
+- [x] 15.3 Replace token-per-event timeline noise with authoritative completed message entries and test normalization.
+- [x] 15.4 Fix safe Windows npm verification launch and persist synchronous launch failures; test failure states, active-check cancellation guards, and verification-only retry without a provider turn.
+- [x] 15.5 Update documentation and CHANGELOG, bump to alpha.2, pass quality gates, and produce updated Windows artifacts. Do not claim controlled real-power validation.

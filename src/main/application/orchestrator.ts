@@ -57,6 +57,7 @@ export class Orchestrator {
   private readonly eventChains = new Map<string, Promise<void>>()
   private readonly scheduler: DurableScheduler
   private readonly verification: VerificationEngine
+  private readonly verifyingJobs = new Set<string>()
   private queueChain: Promise<void> = Promise.resolve()
   private inhibitorHandle: string | null = null
   private shuttingDown = false
@@ -138,6 +139,39 @@ export class Orchestrator {
   async jobAction(jobId: string, action: string): Promise<Job> {
     const job = this.store.getJob(jobId)
     switch (action) {
+      case 'verify': {
+        const attempt = this.store.getLatestAttempt(jobId)
+        if (
+          !['VERIFICATION_FAILED', 'NEEDS_REVIEW'].includes(job.state) ||
+          attempt?.status !== 'completed' ||
+          this.runtimes.has(jobId) ||
+          this.verifyingJobs.has(jobId)
+        ) {
+          throw new AppError(
+            'INVALID_TRANSITION',
+            'Verification requires a completed provider turn and no active run.'
+          )
+        }
+        const settings = this.store.getSettings()
+        if (
+          this.store.activeJobCount() >= settings.maxConcurrentJobs ||
+          (settings.perProjectExclusive && this.store.activeJobCount(job.projectId) > 0)
+        )
+          throw new AppError(
+            'CONCURRENCY_LIMIT',
+            'Other protected work must finish before verification can run.'
+          )
+        this.transition(
+          jobId,
+          'VERIFYING',
+          'Rerunning checks only; no Codex turn will be started.',
+          attempt.id
+        )
+        void this.runVerification(jobId, attempt.id).catch((error) =>
+          this.recordUnexpected(jobId, error)
+        )
+        break
+      }
       case 'start':
         if (job.state !== 'DRAFT')
           throw new AppError('INVALID_TRANSITION', 'Only a draft job can be started.')
@@ -293,11 +327,11 @@ export class Orchestrator {
     }
   }
 
-  async readCodexThread(threadId: string): Promise<CodexThreadDetail> {
+  async readCodexThread(threadId: string, includeTurns = true): Promise<CodexThreadDetail> {
     const settings = this.store.getSettings()
     const provider = this.providerFactory(settings.providerMode, settings)
     try {
-      const detail = await provider.readThread(threadId)
+      const detail = await provider.readThread(threadId, includeTurns)
       detail.summary.managedJobId = this.store.jobIdForSession(settings.providerMode, threadId)
       return detail
     } finally {
@@ -759,36 +793,66 @@ export class Orchestrator {
     attemptId: string | null,
     message: string
   ): Promise<void> {
+    if (this.store.getJob(jobId).state !== 'RUNNING') return
     if (attemptId)
       this.store.updateAttempt(attemptId, { status: 'completed', stopReason: message }, true)
-    const job = this.transition(
-      jobId,
-      'VERIFYING',
-      'Provider completed; verification is running.',
-      attemptId
-    )
-    await this.finishRuntime(jobId)
-    const project = this.store.getProject(job.projectId)
-    const passed = await this.verification.run(jobId, project.path, job.verification)
-    if (!passed) {
+    this.transition(jobId, 'VERIFYING', 'Provider completed; verification is running.', attemptId)
+    try {
+      await this.finishRuntime(jobId)
+    } catch (error) {
       this.transition(
         jobId,
-        'VERIFICATION_FAILED',
-        'One or more required verification checks failed.',
+        'NEEDS_REVIEW',
+        'Provider cleanup failed before verification; review is required.',
         attemptId
       )
-      this.notify('Verification failed', `${project.name}: required checks did not pass.`)
-      return
+      throw error
     }
-    const completed = this.transition(
-      jobId,
-      'COMPLETED',
-      'Job completed with required verification evidence.',
-      attemptId
-    )
-    this.notify('Job completed', `${project.name}: ${completed.objective.slice(0, 120)}`)
-    await this.schedulePowerIfEligible(completed)
-    void this.processQueue()
+    await this.runVerification(jobId, attemptId)
+  }
+
+  private async runVerification(jobId: string, attemptId: string | null): Promise<void> {
+    if (this.verifyingJobs.has(jobId))
+      throw new AppError('CONCURRENCY_LIMIT', 'Verification is already running.')
+    this.verifyingJobs.add(jobId)
+    const job = this.store.getJob(jobId)
+    const project = this.store.getProject(job.projectId)
+    try {
+      const passed = await this.verification.run(jobId, project.path, job.verification)
+      if (this.store.getJob(jobId).state !== 'VERIFYING') return
+      if (!passed) {
+        this.transition(
+          jobId,
+          'VERIFICATION_FAILED',
+          'One or more required verification checks failed.',
+          attemptId
+        )
+        this.notify('Verification failed', `${project.name}: required checks did not pass.`)
+        return
+      }
+      const completed = this.transition(
+        jobId,
+        'COMPLETED',
+        'Job completed with required verification evidence.',
+        attemptId
+      )
+      this.notify('Job completed', `${project.name}: ${completed.objective.slice(0, 120)}`)
+      await this.schedulePowerIfEligible(completed)
+    } catch (error) {
+      await this.recordUnexpected(jobId, error)
+      if (this.store.getJob(jobId).state === 'VERIFYING') {
+        this.transition(
+          jobId,
+          'NEEDS_REVIEW',
+          'Verification could not finish; inspect the error and rerun checks without repeating Codex work.',
+          attemptId
+        )
+      }
+    } finally {
+      this.verifyingJobs.delete(jobId)
+      await this.syncInhibitor()
+      void this.processQueue()
+    }
   }
 
   private async schedulePowerIfEligible(job: Job): Promise<void> {
@@ -932,6 +996,11 @@ export class Orchestrator {
           job.state
         )
       ) {
+        if (job.state === 'VERIFYING') {
+          for (const run of this.store.getVerificationRuns(job.id)) {
+            if (run.status === 'running') this.store.completeVerificationRun(run.id, 'failed')
+          }
+        }
         this.store.resolvePendingApprovals(job.id)
         this.transition(
           job.id,
@@ -999,6 +1068,12 @@ export class Orchestrator {
   private async cancel(job: Job): Promise<void> {
     if (isTerminalState(job.state))
       throw new AppError('INVALID_TRANSITION', 'Job is already finished.')
+    if (job.state === 'VERIFYING') {
+      throw new AppError(
+        'INVALID_TRANSITION',
+        'Checks are still running. Workspace protection remains held until they finish or reach their configured timeout.'
+      )
+    }
     const runtime = this.runtimes.get(job.id)
     this.store.resolvePendingApprovals(job.id)
     this.cancelPendingSchedules(job.id)

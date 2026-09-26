@@ -117,6 +117,16 @@ Follow the full [controlled manual test checklist](manual-testing.md).
 - A packaged Windows build still requires the global Settings opt-in and an explicit per-job action; the default action is `none`.
 - Do not add environment-variable shortcuts that weaken provider authentication, approvals, billing, usage limits, or power guards.
 
+## Windows verification
+
+Configured npm/npx checks require an installed Node.js/npm on the desktop process's PATH; restart Orchestrator after installation or PATH changes. The main process resolves npm's CLI script and launches it with native Node, never by executing `npm.cmd` directly or constructing an untrusted shell string. For pnpm/yarn or custom batch wrappers, configure the native executable and CLI script as separate arguments. Launch failures are persisted as failed checks; **Rerun checks only** does not consume Codex usage or repeat provider work.
+
+Cancellation is unavailable during active verification: workspace protection remains held until checks finish or hit their configured timeout. Closing/crashing the application is not a verification-cancellation mechanism; interrupted verification requires review after restart before checks can be rerun.
+
+## Desktop thread navigation
+
+The application opens an existing thread using OpenAI's documented ChatGPT desktop deep link. Automated tests validate the IPC and intercept `shell.openExternal`; they do not launch or automate ChatGPT. Confirm actual navigation manually without sending a prompt. Do not expand the dedicated thread-id contract into a general `codex://` launcher.
+
 ## Logging
 
 Use structured logging and redaction from day one. Do not add temporary logs that print full provider payloads or process environments.

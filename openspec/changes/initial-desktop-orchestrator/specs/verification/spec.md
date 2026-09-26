@@ -25,6 +25,25 @@ The system SHALL persist the outcome and bounded evidence for each verification 
 - **WHEN** a verification command completes
 - **THEN** the system stores its check identity, timing, exit result, pass/fail result, and bounded/redacted output evidence
 
+#### Scenario: Verification command cannot launch
+
+- **WHEN** command resolution or process launch fails, including a synchronous operating-system error
+- **THEN** the check and run record failed evidence and the job does not remain stuck in verifying
+- **AND** required verification failure blocks completion and power actions
+
+#### Scenario: User retries checks after a completed provider turn
+
+- **WHEN** a user reruns failed or interrupted verification after a completed provider attempt
+- **THEN** only the configured checks run, without resuming Codex or starting another turn
+- **AND** concurrent duplicate verification is rejected
+
+#### Scenario: User requests cancellation during an active check
+
+- **WHEN** a verification process is still running
+- **THEN** job cancellation is rejected as invalid for the verifying state
+- **AND** workspace/concurrency protection remains held until checks finish or reach their configured timeout
+- **AND** the interface does not offer cancellation as an available action in that state
+
 ### Requirement: Visible verification configuration
 
 The system MUST make executable verification commands or checks visible to the user rather than executing hidden arbitrary commands.

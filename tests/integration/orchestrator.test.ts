@@ -1,7 +1,7 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Orchestrator } from '@main/application/orchestrator'
 import { OrchestrationStore } from '@main/infrastructure/database/store'
 import { StructuredLogger } from '@main/infrastructure/logging/logger'
@@ -61,6 +61,83 @@ function jobInput(projectId: string, objective: string, action: PowerAction = 'n
 }
 
 describe('orchestrator fake-provider workflows', () => {
+  it('reruns only checks after failure, rejects duplicates, and never repeats provider work', async () => {
+    const { orchestrator, store, power, project, projectPath } = await setup()
+    const job = await orchestrator.createJob({
+      ...jobInput(project.id, 'Verify once then fix the check'),
+      verification: [
+        {
+          id: 'test',
+          kind: 'test',
+          label: 'Controlled check',
+          command: process.execPath,
+          args: [
+            '-e',
+            'setTimeout(() => process.exit(require("node:fs").existsSync("allow") ? 0 : 1), 100)'
+          ],
+          required: true,
+          timeoutMs: 5_000
+        }
+      ]
+    })
+    await waitForState(store, job.id, 'VERIFICATION_FAILED')
+    await writeFile(join(projectPath, 'allow'), '')
+    await orchestrator.jobAction(job.id, 'verify')
+    await expect(orchestrator.jobAction(job.id, 'cancel')).rejects.toThrow(
+      'Workspace protection remains held'
+    )
+    expect(store.getJob(job.id).state).toBe('VERIFYING')
+    await expect(orchestrator.jobAction(job.id, 'verify')).rejects.toThrow(
+      'completed provider turn'
+    )
+    await waitForState(store, job.id, 'COMPLETED')
+    expect(store.getJobDetail(job.id).attempts).toHaveLength(1)
+    expect(store.getVerificationRuns(job.id).map((run) => run.status)).toEqual(['passed', 'failed'])
+    expect(power.actions).toHaveLength(0)
+  })
+
+  it('fails closed on verification infrastructure errors and continues queued work', async () => {
+    const { orchestrator, store, project } = await setup()
+    const failure = vi.spyOn(store, 'startVerificationRun').mockImplementationOnce(() => {
+      throw new Error('Controlled persistence failure')
+    })
+    const job = await orchestrator.createJob(jobInput(project.id, 'Persistence failure'))
+    await waitForState(store, job.id, 'NEEDS_REVIEW')
+    expect(
+      store
+        .listEvents(job.id)
+        .some((event) => event.message.includes('Controlled persistence failure'))
+    ).toBe(true)
+    failure.mockRestore()
+    const next = await orchestrator.createJob(jobInput(project.id, 'Queue still works'))
+    await waitForState(store, next.id, 'COMPLETED')
+  })
+
+  it('recovers interrupted verification without starting a second provider attempt', async () => {
+    const { orchestrator, store, project } = await setup()
+    const job = store.createJob({
+      ...jobInput(project.id, 'Interrupted checks'),
+      startImmediately: false
+    })
+    store.transitionJob(job.id, 'QUEUED', 'queued')
+    store.transitionJob(job.id, 'STARTING', 'started')
+    const attempt = store.createAttempt(job.id, 'start')
+    store.updateAttempt(attempt.id, { status: 'completed' }, true)
+    store.transitionJob(job.id, 'RUNNING', 'running')
+    store.transitionJob(job.id, 'VERIFYING', 'checks')
+    store.startVerificationRun(job.id)
+    await orchestrator.shutdown()
+    instances.splice(0)
+    const recovered = new Orchestrator(store, new FakePowerAdapter(), new StructuredLogger())
+    instances.push({ orchestrator: recovered, store })
+    await recovered.initialize()
+    expect(store.getJob(job.id).state).toBe('NEEDS_REVIEW')
+    expect(store.getVerificationRuns(job.id)[0]?.status).toBe('failed')
+    await recovered.jobAction(job.id, 'verify')
+    await waitForState(store, job.id, 'COMPLETED')
+    expect(store.getJobDetail(job.id).attempts).toHaveLength(1)
+  })
+
   it('loads a connected workspace and explicitly continues one saved session without duplicating it', async () => {
     const store = new OrchestrationStore(':memory:')
     const orchestrator = new Orchestrator(

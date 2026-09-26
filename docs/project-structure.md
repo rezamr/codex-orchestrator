@@ -22,9 +22,10 @@ codex-orchestrator/
 │   │   │   ├── database/            # SQLite store and numbered migrations
 │   │   │   ├── logging/             # Structured logs and redaction
 │   │   │   ├── platform/            # Power and OS capability adapters
+│   │   │   ├── process/             # Shell-free native verification command resolution
 │   │   │   └── providers/           # Provider interface, Codex and fake adapters
 │   │   ├── ipc/                     # Validated main-process handlers
-│   │   └── security/                # Trusted renderer/URL boundary
+│   │   └── security/                # Trusted renderer/URL and validated thread-link boundary
 │   ├── preload/                     # Narrow typed context bridge
 │   ├── renderer/src/
 │   │   ├── components/              # Shared interface components

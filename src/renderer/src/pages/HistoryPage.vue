@@ -6,7 +6,7 @@ import EmptyState from '../components/EmptyState.vue'
 import { useOrchestratorStore } from '../stores/orchestrator'
 
 const store = useOrchestratorStore()
-const emit = defineEmits<{ job: [id: string] }>()
+const emit = defineEmits<{ job: [id: string]; navigate: [page: string] }>()
 const query = ref('')
 const showArchived = ref(true)
 const visibleCount = ref(100)
@@ -38,6 +38,18 @@ async function refreshCodexHistory(): Promise<void> {
   visibleCount.value = 100
   await store.loadCodexThreads()
 }
+
+function continueSelectedThread(): void {
+  const id = store.selectedCodexThread?.summary.id
+  if (!id) return
+  store.continuationTarget = id
+  emit('navigate', 'jobs')
+}
+
+const selectedSummary = computed(() => {
+  const id = store.selectedCodexThread?.summary.id
+  return store.codexThreads?.threads.find((thread) => thread.id === id)
+})
 </script>
 
 <template>
@@ -115,6 +127,38 @@ async function refreshCodexHistory(): Promise<void> {
               <h3>{{ store.selectedCodexThread.summary.name || 'Codex conversation' }}</h3>
               <span>{{ store.selectedCodexThread.summary.archived ? 'Archived' : 'Active' }}</span>
             </header>
+            <div class="toolbar">
+              <button
+                v-if="selectedSummary?.managedJobId"
+                class="button"
+                type="button"
+                @click="emit('job', selectedSummary.managedJobId)"
+              >
+                Open job
+              </button>
+              <button
+                v-else
+                class="button primary"
+                type="button"
+                :disabled="
+                  !selectedSummary?.cwd ||
+                  selectedSummary.archived ||
+                  ['active', 'running'].includes(selectedSummary.status ?? '')
+                "
+                @click="continueSelectedThread"
+              >
+                Continue this conversation
+              </button>
+              <button
+                v-if="store.provider?.mode === 'codex'"
+                class="button"
+                type="button"
+                @click="store.openCodexThread(store.selectedCodexThread.summary.id)"
+              >
+                Open in ChatGPT
+              </button>
+            </div>
+            <p class="provider-data-note">Thread: {{ store.selectedCodexThread.summary.id }}</p>
             <p v-if="store.selectedCodexThread.truncated" class="provider-data-note">
               This transcript is too large to display in full. The original Codex history was not
               changed.

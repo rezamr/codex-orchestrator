@@ -94,7 +94,7 @@ Use UTC internally for durable timestamps and format in the UI for the user's lo
 
 Implement:
 
-- executable discovery and manual path selection,
+- automatic executable discovery and identity/version validation (no manual GUI executable selection),
 - version/capability probing,
 - app-server process supervision,
 - protocol initialization using current official documentation,

@@ -84,7 +84,27 @@ The system SHALL load available Codex account and thread data in the background 
 - **WHEN** the Codex app-server is unavailable
 - **THEN** each connected view presents the refresh error without hiding Orchestrator-owned jobs or projects
 
-### Requirement: Useful default for new work
+### Requirement: Explicit conversation destination for new work
+
+The system SHALL distinguish new conversation creation from continuation of an existing Codex thread and show the destination before starting work.
+
+#### Scenario: User chooses an existing conversation as the target
+
+- **WHEN** the user continues a conversation from History or the job form
+- **THEN** the form shows the exact destination title, thread id, and workspace before submission
+- **AND** the new-conversation option explicitly says it will not continue an existing chat
+
+### Requirement: Open the corresponding ChatGPT desktop conversation
+
+The system SHALL provide a narrow action to open a known local Codex thread in ChatGPT desktop using the officially documented `codex://threads/<thread-id>` link. This action MUST NOT send a prompt, start a turn, or accept an arbitrary renderer-supplied URL.
+
+#### Scenario: User opens a managed conversation in ChatGPT
+
+- **WHEN** the user chooses Open in ChatGPT for a known Codex thread
+- **THEN** main validates the thread id and opens only that thread's canonical deep link
+- **AND** a failed desktop launch is visible and does not mutate the job
+
+### Requirement: Useful default provider for new work
 
 The system SHALL default a newly created user job to the Codex provider while keeping simulation an explicit choice.
 

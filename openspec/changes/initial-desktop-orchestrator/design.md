@@ -21,7 +21,7 @@ The product is a privileged local desktop application wrapped around long-runnin
 - Cloud synchronization.
 - Remote control from mobile/web.
 - Multiple agent providers beyond the interfaces needed to keep that future path open.
-- Reading private ChatGPT desktop package storage, copying provider credentials, or taking write actions on historical Codex threads.
+- Reading private ChatGPT desktop package storage, copying provider credentials, or implicitly writing to historical Codex threads while browsing. A separately confirmed continuation is explicitly supported.
 
 ## Major decisions
 
@@ -71,7 +71,15 @@ Prefer structured retry/reset metadata when available. Otherwise classify docume
 
 ### Verification
 
+Active verification retains workspace/concurrency protection until the bounded command finishes. Cancellation is not a valid lifecycle action while `VERIFYING`; expose this restriction rather than transitioning to a terminal state while a command may still modify the workspace.
+
 Provider completion is a candidate completion. Configured checks determine verified success. Store check commands/configuration and result evidence with bounded output.
+
+On Windows, do not pass batch wrappers such as `npm.cmd` directly to `execFile`. Resolve npm/npx to an installed native Node executable and the associated npm JavaScript entry point, retaining argument arrays and `shell: false`. Unsupported batch wrappers fail with actionable evidence rather than falling back to untrusted shell concatenation. Synchronous launch errors are failed check evidence. An unexpected verification infrastructure failure enters NEEDS_REVIEW instead of leaving VERIFYING. Rerun verification is separate from provider retry and never starts another Codex turn; duplicate checks are guarded.
+
+### Desktop conversation navigation and continuation clarity
+
+The job form distinguishes a new conversation from an explicit existing-thread target and displays the selected thread identity. History can route directly into that continuation form. A narrow validated IPC operation opens known local Codex threads through OpenAI's documented `codex://threads/<thread-id>` deep link. It does not control ChatGPT's UI, send prompts, or claim live cross-client refresh. Agent-message token deltas are not appended as individual audit events; completed message items are the authoritative readable timeline entries.
 
 ### Power management
 

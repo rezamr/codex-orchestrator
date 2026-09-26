@@ -182,7 +182,24 @@ Compatibility verified in automated tests:
 
 Not yet claimed: a completed real-account turn. That remains an explicit controlled release test because it consumes account usage and may require interactive authentication/approval.
 
-## References
+## Desktop continuity contract (alpha.2)
+
+Official OpenAI documentation distinguishes `thread/start` (new history) from `thread/resume` (reopen the recorded thread id) and `turn/start` (append user input and generate). Text such as “please continue” is not a protocol-level session selector. The job form now makes this choice explicit and History can hand its selected thread directly to the continuation form. The destination title, id, and workspace are shown before submission.
+
+**Open in ChatGPT** validates an existing local thread through a metadata-only `thread/read` and opens `codex://threads/<thread-id>`, documented by OpenAI for ChatGPT desktop. This is a narrow main-process operation, not a general renderer URL launcher, UI automation, or automatic prompt submission. A missing desktop protocol handler is reported as an error. Automated tests intercept the operating-system launcher; actual desktop navigation remains a manual smoke check.
+
+App-server is a local Codex integration, not a general API for ChatGPT web conversations. No automatic cross-client live refresh or external-client exclusivity is claimed. A turn finishing also does not prove that the original engineering objective was fulfilled: operator review and configured verification still matter, and a model may report a genuine external blocker.
+
+The official event contract identifies `item/completed` as authoritative. Agent-message deltas are therefore not persisted as individual word/token audit rows; completed messages are displayed once, bounded to 2,000 characters. The on-demand History transcript remains available for fuller context.
+
+## Official references checked for alpha.2
+
+- [OpenAI: Codex as a platform](https://developers.openai.com/blog/codex-as-a-platform)
+- [OpenAI: App-server protocol, start/resume/read, and item lifecycle](https://learn.chatgpt.com/docs/app-server)
+- [OpenAI: ChatGPT desktop thread deep links](https://learn.chatgpt.com/docs/reference/commands#deep-links)
+- [OpenAI: Desktop and CLI developer commands](https://learn.chatgpt.com/docs/developer-commands)
+
+## Earlier integration references
 
 - https://developers.openai.com/blog/codex-as-a-platform
 - https://developers.openai.com/docs/mcp-server

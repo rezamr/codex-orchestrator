@@ -23,6 +23,7 @@ const api: OrchestratorApi = {
   readCodexThread: (threadId) => ipcRenderer.invoke(IPC_CHANNELS.codexThreadRead, threadId),
   loadCodexWorkspace: () => ipcRenderer.invoke(IPC_CHANNELS.codexWorkspace),
   continueCodexThread: (input) => ipcRenderer.invoke(IPC_CHANNELS.codexThreadContinue, input),
+  openCodexThread: (threadId) => ipcRenderer.invoke(IPC_CHANNELS.codexThreadOpen, threadId),
   getDiagnostics: () => ipcRenderer.invoke(IPC_CHANNELS.diagnosticsSnapshot),
   exportDiagnostics: () => ipcRenderer.invoke(IPC_CHANNELS.diagnosticsExport),
   openExternal: (url) => ipcRenderer.invoke(IPC_CHANNELS.externalOpen, { url }),

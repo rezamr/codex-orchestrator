@@ -16,6 +16,83 @@ function createJob(store: OrchestrationStore) {
 }
 
 describe('verification engine', () => {
+  it('persists a synchronous invalid-argument launch failure instead of rejecting and leaving a running run', async () => {
+    const store = new OrchestrationStore(':memory:')
+    try {
+      const job = createJob(store)
+      expect(
+        await new VerificationEngine(store).run(job.id, process.cwd(), [
+          {
+            id: 'invalid',
+            kind: 'custom',
+            label: 'Invalid argument',
+            command: process.execPath,
+            args: ['\0'],
+            required: true,
+            timeoutMs: 5_000
+          }
+        ])
+      ).toBe(false)
+      const run = store.getVerificationRuns(job.id)[0]!
+      expect(run.status).toBe('failed')
+      expect(run.endedAt).not.toBeNull()
+      expect(run.checks[0]).toMatchObject({ passed: false, exitCode: null })
+      expect(run.checks[0]?.error).toBeTruthy()
+    } finally {
+      store.close()
+    }
+  })
+
+  it('preserves shell metacharacters as literal native-process arguments', async () => {
+    const store = new OrchestrationStore(':memory:')
+    try {
+      const job = createJob(store)
+      const argument = 'literal & echo NOT_A_COMMAND | %PATH% "quoted"'
+      expect(
+        await new VerificationEngine(store).run(job.id, process.cwd(), [
+          {
+            id: 'literal',
+            kind: 'custom',
+            label: 'Literal arguments',
+            command: process.execPath,
+            args: ['-e', 'console.log(process.argv[1])', argument],
+            required: true,
+            timeoutMs: 5_000
+          }
+        ])
+      ).toBe(true)
+      expect(store.getVerificationRuns(job.id)[0]?.checks[0]?.output.trim()).toBe(argument)
+    } finally {
+      store.close()
+    }
+  })
+
+  it.skipIf(process.platform !== 'win32')(
+    'launches installed npm through Node without a batch shell',
+    async () => {
+      const store = new OrchestrationStore(':memory:')
+      try {
+        const job = createJob(store)
+        expect(
+          await new VerificationEngine(store).run(job.id, process.cwd(), [
+            {
+              id: 'npm',
+              kind: 'custom',
+              label: 'npm version',
+              command: 'npm',
+              args: ['--version'],
+              required: true,
+              timeoutMs: 10_000
+            }
+          ])
+        ).toBe(true)
+        expect(store.getVerificationRuns(job.id)[0]?.checks[0]?.output).toMatch(/\d+\.\d+\.\d+/)
+      } finally {
+        store.close()
+      }
+    }
+  )
+
   it('persists bounded evidence and blocks on required failure', async () => {
     const store = new OrchestrationStore(':memory:')
     const job = createJob(store)

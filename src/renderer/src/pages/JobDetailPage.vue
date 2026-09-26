@@ -27,9 +27,14 @@ const actions = computed(() => {
   if (['STARTING', 'RUNNING'].includes(state)) result.push(['interrupt', 'Interrupt', ''])
   if (['PAUSED', 'WAITING_FOR_LIMIT', 'WAITING_FOR_RETRY'].includes(state))
     result.push(['resume', 'Resume', 'primary'])
+  if (
+    ['VERIFICATION_FAILED', 'NEEDS_REVIEW'].includes(state) &&
+    detail.value?.attempts[0]?.status === 'completed'
+  )
+    result.push(['verify', 'Rerun checks only', 'primary'])
   if (['FAILED', 'VERIFICATION_FAILED', 'NEEDS_REVIEW'].includes(state))
-    result.push(['retry', 'Retry', 'primary'])
-  if (!['COMPLETED', 'FAILED', 'CANCELLED'].includes(state))
+    result.push(['retry', 'Retry Codex work', ''])
+  if (!['COMPLETED', 'FAILED', 'CANCELLED', 'VERIFYING'].includes(state))
     result.push(['cancel', 'Cancel', 'danger-text'])
   if (['COMPLETED', 'FAILED', 'CANCELLED', 'VERIFICATION_FAILED'].includes(state))
     result.push(['archive', 'Archive', ''])
@@ -56,7 +61,19 @@ async function cancelCountdown(scheduleId: string): Promise<void> {
         <StatusPill :state="detail.job.state" />
       </div>
       <p class="detail-reason">{{ detail.job.stateReason }}</p>
+      <p v-if="detail.job.state === 'VERIFYING'" class="provider-data-note">
+        Checks retain workspace protection until they finish or reach their configured timeout.
+        Cancellation is unavailable while they run.
+      </p>
       <div class="toolbar">
+        <button
+          v-if="detail.job.provider === 'codex' && detail.sessions[0]"
+          class="button"
+          type="button"
+          @click="store.openCodexThread(detail.sessions[0].externalId)"
+        >
+          Open in ChatGPT
+        </button>
         <button
           v-for="action in actions"
           :key="action[0]"
@@ -159,7 +176,8 @@ async function cancelCountdown(scheduleId: string): Promise<void> {
                 <span>{{ check.passed ? '✓' : '×' }} {{ check.label }}</span
                 ><code>{{ check.command }}</code>
               </summary>
-              <pre>{{ check.output || check.error || 'No output' }}</pre>
+              <pre>{{ check.output || 'No output' }}</pre>
+              <p v-if="check.error" class="alert error">{{ check.error }}</p>
             </details>
           </article>
         </section>

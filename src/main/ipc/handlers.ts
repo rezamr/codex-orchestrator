@@ -3,6 +3,7 @@ import { basename } from 'node:path'
 import { app, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
 import type { Orchestrator } from '@main/application/orchestrator'
 import { isTrustedRendererUrl } from '@main/security/trusted-renderer'
+import { codexThreadDeepLink } from '@main/security/codex-deep-link'
 import { AppError } from '@shared/errors'
 import { IPC_CHANNELS } from '@shared/contracts/ipc'
 import {
@@ -97,6 +98,16 @@ export function registerIpcHandlers(orchestrator: Orchestrator): () => void {
   handle(IPC_CHANNELS.codexThreadContinue, (_event, input: unknown) =>
     orchestrator.continueCodexThread(continueCodexThreadSchema.parse(input))
   )
+  handle(IPC_CHANNELS.codexThreadOpen, async (_event, input: unknown) => {
+    const threadId = codexThreadIdSchema.parse(input)
+    const link = codexThreadDeepLink(threadId)
+    if (orchestrator.getSettings().providerMode !== 'codex') {
+      throw new AppError('VALIDATION', 'Simulated conversations cannot be opened in ChatGPT.')
+    }
+    // Confirm a saved provider thread exists without loading/resuming it or starting a turn.
+    await orchestrator.readCodexThread(threadId, false)
+    await shell.openExternal(link)
+  })
   handle(IPC_CHANNELS.diagnosticsSnapshot, () => orchestrator.diagnostics(app.getVersion()))
   handle(IPC_CHANNELS.diagnosticsExport, async () => {
     const diagnostics = await orchestrator.diagnostics(app.getVersion())

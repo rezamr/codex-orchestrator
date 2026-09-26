@@ -37,6 +37,7 @@ export const IPC_CHANNELS = {
   codexThreadRead: 'codex:thread-read',
   codexWorkspace: 'codex:workspace',
   codexThreadContinue: 'codex:thread-continue',
+  codexThreadOpen: 'codex:thread-open',
   diagnosticsSnapshot: 'diagnostics:snapshot',
   diagnosticsExport: 'diagnostics:export',
   externalOpen: 'external:open',
@@ -67,6 +68,7 @@ export interface OrchestratorApi {
   readCodexThread(threadId: string): Promise<CodexThreadDetail>
   loadCodexWorkspace(): Promise<CodexWorkspaceSnapshot>
   continueCodexThread(input: ContinueCodexThreadInput): Promise<Job>
+  openCodexThread(threadId: string): Promise<void>
   getDiagnostics(): Promise<DiagnosticSnapshot>
   exportDiagnostics(): Promise<string | null>
   openExternal(url: string): Promise<void>

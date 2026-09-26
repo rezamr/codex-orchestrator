@@ -2,7 +2,7 @@
 
 Codex Orchestrator is an open-source, desktop-first control plane for durable, long-running Codex engineering work. It does not replace Codex: it manages the work around it—queues, sessions, interruptions, approvals, verification, recovery, and optional post-completion computer actions.
 
-> **Status: `0.1.0-alpha.1`.** This is an early alpha for developers and testers. Automated workflows and a read-only live Codex app-server check pass. A usage-consuming real Codex turn and real sleep/hibernate/restart/shutdown actions have not been manually validated.
+> **Status: `0.1.0-alpha.2`.** This is an early alpha for developers and testers. Automated workflows and a read-only live Codex app-server check pass. A complete controlled real-Codex workflow and real sleep/hibernate/restart/shutdown actions have not been manually validated.
 
 Codex Orchestrator is an independent community project and is not an official OpenAI product. It is licensed under MIT; see [LICENSE](LICENSE).
 
@@ -20,10 +20,13 @@ It does not bypass Codex or OpenAI authentication, safety controls, billing, or 
 - Read-only account mode, plan, usage-limit, token-activity, and local thread history views using supported app-server methods. Active and archived threads are paginated; selecting a conversation reads its turns without resuming it. The thread index is bounded at 20,000 entries and the UI indicates if the bound is reached. Transcript contents are not copied into Orchestrator’s SQLite database.
 - On launch and refresh, account and conversation summaries load into shared UI state: Dashboard shows connected-workspace summaries, Projects groups discovered conversation folders, Jobs shows existing conversations, and Activity shows recent Codex updates separately from Orchestrator's audit events. A local project is not silently registered merely because it appears in Codex.
 - An explicit **Continue** action on an eligible conversation creates a durable job linked to the same Codex session and starts a new turn using the user's entered instruction. Archived, active, missing-workspace, and already-managed conversations are rejected; merely browsing never starts work.
+- History can open the selected conversation's continuation form directly. The job form shows its destination title, thread id, and workspace. A new conversation does **not** inherit another chat just because the instruction says “please continue”. **Open in ChatGPT** uses OpenAI's documented desktop thread deep link without sending a prompt or automating the UI.
 - Provider start, resume, interrupt, approval handling, normalized activity, and usage-limit wait/continuation. Cancel acts on the orchestration job; it does not alter Codex account settings or limits.
 - Durable SQLite state with numbered migrations for projects, jobs, attempts, session references, schedules, events, approvals, verification evidence, and settings.
 - Crash/restart recovery, bounded retries and resumes, duplicate-work protection, and user-visible review states when recovery is uncertain.
 - Configurable verification using test, typecheck, lint, build, custom, and Git-status checks. Completion is not treated as verified when required checks fail.
+- Windows npm/npx checks resolve the installed Node and npm CLI rather than executing `.cmd` files with `execFile`. Launch failures become failed evidence, not stuck jobs. **Rerun checks only** repeats verification after a completed provider turn without starting another Codex turn.
+- Cancellation is unavailable while verification runs: workspace protection remains held until the configured checks finish or time out. Restarting after interrupted verification requires review rather than assuming success.
 - Desktop notifications, structured/redacted logs, activity and history views, and redacted diagnostic export.
 - Persisted retry/resume schedules and guarded post-completion power countdowns. The Automations screen shows Orchestrator's schedules only; the supported app-server interface does not expose a Codex desktop automation index.
 - A fake provider and simulated power adapter for development, integration tests, and Electron E2E tests.
@@ -70,6 +73,8 @@ Connection checks use `account/read` without forcing token refresh and read avai
 
 Discovered workspaces come from the `cwd` on conversations, not a separate Codex project registry. No supported app-server `project/list` or desktop `automation/list` endpoint is assumed. `notLoaded` is shown as **Stored**, not as a completed task. Continuing a conversation is a separate, explicit operation; Orchestrator validates its reported workspace and records the session link before requesting a new turn.
 
+App-server embeds the local Codex harness; it is not an API for controlling arbitrary ChatGPT web chats or the running desktop UI. Opening a desktop thread uses the [official ChatGPT deep-link contract](https://learn.chatgpt.com/docs/reference/commands#deep-links). Automatic live refresh or exclusive ownership across other Codex clients is not guaranteed. Agent messages enter the audit timeline as completed items, not individual token fragments; History provides the bounded full transcript.
+
 ## Installation and development
 
 ### End users
@@ -103,7 +108,7 @@ Normal user operation is GUI-first. OpenSpec and build commands are for maintain
 
 ## Current validation and limitations
 
-Validation on 2026-09-25: strict validation of the active OpenSpec change, TypeScript typecheck, lint, 38 unit/integration tests, 6 Electron E2E scenarios, production build, Windows NSIS/portable packaging, and a live read-only app-server compatibility test pass. The live test is skipped in the default suite. Migration tests cover schema upgrades and removal of the obsolete manual executable setting. `npm audit` against the official npm registry found zero known vulnerabilities at the time; audit results are time-sensitive.
+Validation commands and their results are recorded in the CHANGELOG and release notes. The live read-only test is skipped in the default suite. Migration tests cover schema upgrades and removal of the obsolete manual executable setting. Dependency audit results are time-sensitive.
 
 The active OpenSpec change retains **13.6, controlled manual testing of real power actions on a sacrificial test machine**, as an unfinished gate. No real sleep, hibernate, restart, or shutdown action was executed during development or automated testing. In packaged Windows builds, disruptive actions require the Settings opt-in, an explicit job policy, successful completion/verification, safety checks, and a cancellable countdown. They remain unverified on a controlled machine. macOS/Linux disruptive power actions and automatic wake scheduling are unsupported.
 

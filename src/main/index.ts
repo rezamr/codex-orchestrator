@@ -142,6 +142,9 @@ async function setupApplication(): Promise<void> {
   )
   disposeIpc = registerIpcHandlers(orchestrator)
   orchestrator.subscribe((event) => mainWindow?.webContents.send(IPC_CHANNELS.stateChanged, event))
+  orchestrator.subscribeConversation((jobId) =>
+    mainWindow?.webContents.send(IPC_CHANNELS.conversationChanged, jobId)
+  )
   await orchestrator.initialize()
   mainWindow = createWindow()
 }

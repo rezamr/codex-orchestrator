@@ -142,3 +142,12 @@
 - [x] 15.3 Replace token-per-event timeline noise with authoritative completed message entries and test normalization.
 - [x] 15.4 Fix safe Windows npm verification launch and persist synchronous launch failures; test failure states, active-check cancellation guards, and verification-only retry without a provider turn.
 - [x] 15.5 Update documentation and CHANGELOG, bump to alpha.2, pass quality gates, and produce updated Windows artifacts. Do not claim controlled real-power validation.
+
+## 16. Busy-session and coherent-output correction
+
+- [x] 16.1 Classify external writer conflicts, require review without automatic retry, preserve ownership, and test that rejected resume submits no turn.
+- [x] 16.2 Strip terminal controls before redaction and sanitize legacy event presentation without database rewrites.
+- [x] 16.3 Aggregate streaming messages in bounded memory, display coherent conversation output separately from raw legacy audit, and support read-only saved job transcripts.
+- [x] 16.4 Cover live output, saved retrieval, busy/manual retry, redaction, bounds, legacy audit, and safe simulated power through unit/integration/Electron tests.
+- [x] 16.5 Update docs and CHANGELOG, bump alpha.3, pass quality gates, audit and package Windows artifacts without claiming controlled real-power validation.
+  - 2026-09-26: strict OpenSpec, typecheck, lint, format check, 65 unit/integration tests (including migrations), 12 fake-provider/fake-power Electron E2E tests, production build and Windows NSIS/portable packaging passed. The separate live read-only Codex test passed without a real turn. Public-registry npm audit found zero vulnerabilities. Packaged version and main bundle matched the final build; artifacts are unsigned. No real power action or installer execution was performed; task 13.6 stays pending. The long-text redaction regression initially failed due to quadratic suffix matching; it was fixed with a linear reverse scan and the final suites passed.

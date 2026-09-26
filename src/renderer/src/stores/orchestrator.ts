@@ -189,7 +189,19 @@ export const useOrchestratorStore = defineStore('orchestrator', () => {
   }
 
   const unsubscribe = window.orchestrator.onStateChanged(() => void refresh())
+  const unsubscribeConversation = window.orchestrator.onConversationChanged((jobId) => {
+    if (selectedJob.value?.job.id !== jobId) return
+    void window.orchestrator
+      .getJobDetail(jobId)
+      .then((result) => {
+        if (selectedJob.value?.job.id === jobId) selectedJob.value = result
+      })
+      .catch((caught) => {
+        error.value = messageFrom(caught)
+      })
+  })
   window.addEventListener('beforeunload', unsubscribe, { once: true })
+  window.addEventListener('beforeunload', unsubscribeConversation, { once: true })
 
   return {
     snapshot,

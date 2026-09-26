@@ -13,6 +13,8 @@ Define provider-neutral lifecycle/event contracts and implement Codex app-server
 
 The provider contract includes normalized read-only account, usage, and thread-history projections as well as lifecycle operations. Raw app-server JSON-RPC remains adapter-only; conversation content is not an orchestration persistence entity.
 
+Alpha.3 adds provider-neutral `message.updated` events with turn/item identity and start/delta/complete modes. The application accumulates a bounded memory-only projection rather than storing these as durable events. External writer rejection is the typed `PROVIDER_BUSY` condition and fails closed to review without exposing protocol methods or takeover controls in renderer IPC.
+
 ## Consequences
 
 - Domain state and UI contracts stay stable across provider changes.

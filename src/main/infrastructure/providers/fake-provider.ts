@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { cwd } from 'node:process'
+import { AppError } from '@shared/errors'
 import type {
   CodexAccountSnapshot,
   CodexThreadDetail,
@@ -150,6 +151,11 @@ export class FakeProvider implements AgentProvider {
 
   async start(request: ProviderStartRequest): Promise<ProviderSessionRef> {
     if (!this.connected) await this.connect()
+    if (request.objective.includes('[busy]'))
+      throw new AppError(
+        'PROVIDER_BUSY',
+        'This conversation is owned by another active Codex client. Wait for that client to release it, then retry manually. No instruction was sent.'
+      )
     const ref = { sessionId: randomUUID(), turnId: randomUUID() }
     this.sessions.set(ref.sessionId, ref)
     this.emit({ type: 'session.started', sessionId: ref.sessionId })
@@ -160,6 +166,11 @@ export class FakeProvider implements AgentProvider {
 
   async resume(request: ProviderResumeRequest): Promise<ProviderSessionRef> {
     if (!this.connected) await this.connect()
+    if (request.objective.includes('[busy]'))
+      throw new AppError(
+        'PROVIDER_BUSY',
+        'This conversation is owned by another active Codex client. Wait for that client to release it, then retry manually. No instruction was sent.'
+      )
     const ref = { sessionId: request.sessionId, turnId: randomUUID() }
     this.sessions.set(ref.sessionId, ref)
     this.emit({ type: 'session.started', sessionId: ref.sessionId })
@@ -198,6 +209,11 @@ export class FakeProvider implements AgentProvider {
   }
 
   private runScenario(objective: string, ref: ProviderSessionRef): void {
+    if (objective.includes('[legacy]')) {
+      for (const text of ['legacy-frag-one', 'legacy-frag-two', 'Legacy full response.']) {
+        this.emit({ type: 'activity', message: text })
+      }
+    }
     this.later(
       () => this.emit({ type: 'activity', message: 'Inspecting the selected project.' }),
       10
@@ -245,6 +261,48 @@ export class FakeProvider implements AgentProvider {
           }),
         20
       )
+      return
+    }
+    if (objective.includes('[stream]')) {
+      this.emit({
+        type: 'message.updated',
+        itemId: 'response',
+        turnId: ref.turnId,
+        text: '',
+        mode: 'start'
+      })
+      this.later(
+        () =>
+          this.emit({
+            type: 'message.updated',
+            itemId: 'response',
+            turnId: ref.turnId,
+            text: 'One coherent ',
+            mode: 'delta'
+          }),
+        100
+      )
+      this.later(
+        () =>
+          this.emit({
+            type: 'message.updated',
+            itemId: 'response',
+            turnId: ref.turnId,
+            text: 'response. ',
+            mode: 'delta'
+          }),
+        500
+      )
+      this.later(() => {
+        this.emit({
+          type: 'message.updated',
+          itemId: 'response',
+          turnId: ref.turnId,
+          text: 'One coherent response.\nSecond line <script> stays harmless text.',
+          mode: 'complete'
+        })
+        this.complete(ref)
+      }, 900)
       return
     }
     this.later(() => this.complete(ref), 30)

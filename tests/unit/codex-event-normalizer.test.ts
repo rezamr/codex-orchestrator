@@ -2,24 +2,24 @@ import { describe, expect, it } from 'vitest'
 import { normalizeCodexNotification } from '@main/infrastructure/providers/codex/event-normalizer'
 
 describe('Codex app-server event normalization', () => {
-  it('records the authoritative completed agent message instead of separate token fragments', () => {
+  it('projects message identities and fragments without turning them into audit entries', () => {
     expect(
       normalizeCodexNotification('item/agentMessage/delta', { itemId: 'm1', delta: 'hel' })
-    ).toEqual([])
+    ).toEqual([{ type: 'message.updated', itemId: 'm1', turnId: '', text: 'hel', mode: 'delta' }])
     expect(
       normalizeCodexNotification('item/agentMessage/delta', { itemId: 'm1', delta: 'lo' })
-    ).toEqual([])
+    ).toEqual([{ type: 'message.updated', itemId: 'm1', turnId: '', text: 'lo', mode: 'delta' }])
     expect(
       normalizeCodexNotification('item/started', {
         item: { type: 'agentMessage', id: 'm1', text: '' }
       })
-    ).toEqual([])
+    ).toEqual([{ type: 'message.updated', itemId: 'm1', turnId: '', text: '', mode: 'start' }])
     expect(
       normalizeCodexNotification('item/completed', {
         item: { type: 'agentMessage', id: 'm1', text: 'hello world' }
       })
     ).toEqual([
-      { type: 'activity', message: 'hello world', metadata: { itemType: 'agentMessage' } }
+      { type: 'message.updated', itemId: 'm1', turnId: '', text: 'hello world', mode: 'complete' }
     ])
   })
   it('maps stable thread and turn notifications', () => {

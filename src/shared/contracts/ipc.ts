@@ -26,6 +26,7 @@ export const IPC_CHANNELS = {
   jobsList: 'jobs:list',
   jobsCreate: 'jobs:create',
   jobsDetail: 'jobs:detail',
+  jobsConversation: 'jobs:conversation',
   jobsAction: 'jobs:action',
   approvalsRespond: 'approvals:respond',
   powerCancel: 'power:cancel',
@@ -41,7 +42,8 @@ export const IPC_CHANNELS = {
   diagnosticsSnapshot: 'diagnostics:snapshot',
   diagnosticsExport: 'diagnostics:export',
   externalOpen: 'external:open',
-  stateChanged: 'orchestrator:state-changed'
+  stateChanged: 'orchestrator:state-changed',
+  conversationChanged: 'jobs:conversation-changed'
 } as const
 
 export interface OrchestratorApi {
@@ -53,6 +55,7 @@ export interface OrchestratorApi {
   listJobs(includeArchived?: boolean): Promise<Job[]>
   createJob(input: CreateJobInput): Promise<Job>
   getJobDetail(jobId: string): Promise<JobDetail>
+  readJobConversation(jobId: string): Promise<CodexThreadDetail>
   jobAction(jobId: string, action: string): Promise<Job>
   respondToApproval(
     approvalId: string,
@@ -73,4 +76,5 @@ export interface OrchestratorApi {
   exportDiagnostics(): Promise<string | null>
   openExternal(url: string): Promise<void>
   onStateChanged(listener: (event: JobEvent | null) => void): () => void
+  onConversationChanged(listener: (jobId: string) => void): () => void
 }

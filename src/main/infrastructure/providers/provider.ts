@@ -24,6 +24,13 @@ export interface ProviderSessionRef {
 }
 
 export type ProviderEvent =
+  | {
+      type: 'message.updated'
+      itemId: string
+      turnId: string
+      text: string
+      mode: 'start' | 'delta' | 'complete'
+    }
   | { type: 'session.started'; sessionId: string }
   | { type: 'turn.started'; sessionId: string; turnId: string }
   | { type: 'activity'; message: string; metadata?: Record<string, unknown> }

@@ -2,7 +2,7 @@
 
 Codex Orchestrator is an open-source, desktop-first control plane for durable, long-running Codex engineering work. It does not replace Codex: it manages the work around it—queues, sessions, interruptions, approvals, verification, recovery, and optional post-completion computer actions.
 
-> **Status: `0.1.0-alpha.2`.** This is an early alpha for developers and testers. Automated workflows and a read-only live Codex app-server check pass. A complete controlled real-Codex workflow and real sleep/hibernate/restart/shutdown actions have not been manually validated.
+> **Status: `0.1.0-alpha.3`.** This is an early alpha for developers and testers. Automated workflows and a read-only live Codex app-server check pass. A complete controlled real-Codex workflow and real sleep/hibernate/restart/shutdown actions have not been manually validated.
 
 Codex Orchestrator is an independent community project and is not an official OpenAI product. It is licensed under MIT; see [LICENSE](LICENSE).
 
@@ -73,7 +73,13 @@ Connection checks use `account/read` without forcing token refresh and read avai
 
 Discovered workspaces come from the `cwd` on conversations, not a separate Codex project registry. No supported app-server `project/list` or desktop `automation/list` endpoint is assumed. `notLoaded` is shown as **Stored**, not as a completed task. Continuing a conversation is a separate, explicit operation; Orchestrator validates its reported workspace and records the session link before requesting a new turn.
 
-App-server embeds the local Codex harness; it is not an API for controlling arbitrary ChatGPT web chats or the running desktop UI. Opening a desktop thread uses the [official ChatGPT deep-link contract](https://learn.chatgpt.com/docs/reference/commands#deep-links). Automatic live refresh or exclusive ownership across other Codex clients is not guaranteed. Agent messages enter the audit timeline as completed items, not individual token fragments; History provides the bounded full transcript.
+App-server embeds the local Codex harness; it is not an API for controlling arbitrary ChatGPT web chats or the running desktop UI. Opening a desktop thread uses the [official ChatGPT deep-link contract](https://learn.chatgpt.com/docs/reference/commands#deep-links). Automatic live refresh or exclusive ownership across other Codex clients is not guaranteed. If another client owns a conversation, resume is rejected and the job requires review: no instruction is sent and no automatic retry is scheduled. Wait for that client to release ownership, then choose **Retry when available**, or create an independent new conversation. Orchestrator never removes Codex locks or forces ownership transfer.
+
+Job detail separates **Conversation output** from the operational timeline. Stream fragments update one escaped plain-text message; the completed item is authoritative, following the [official app-server event contract](https://learn.chatgpt.com/docs/app-server). The memory-only live view retains at most 20 jobs, 100 messages per job, 64,000 characters per message, and 2,000,000 characters per job. Incomplete and truncated output is labelled. It is not a pixel-identical or full Markdown clone of Codex. **Load saved conversation** reads the job's own provider/session without resuming it, including after restart. Verbose old activity rows remain accessible under **Raw provider activity** rather than appearing as separate chat replies. Old rows are neither deleted nor heuristically merged. Terminal styling is removed from diagnostic presentation.
+
+### Safe first test
+
+Install the alpha.3 Windows package, register a disposable project folder, and create a job with **Simulated provider**, objective `[stream] show a coherent response`, no verification commands, and power action **none**. You should see one response update in Conversation output, then Completed. Use `[busy] simulate an external writer` to check Needs review with no automatic retries. These simulated markers do not contact Codex. To test the real provider, follow the controlled procedure in [manual testing](docs/manual-testing.md); do not try to resume a conversation still owned by another Codex client.
 
 ## Installation and development
 

@@ -204,6 +204,19 @@ input.on('line', (line) => {
     return
   }
   if (method === 'thread/resume') {
+    if (params.threadId === 'fixture-busy') {
+      process.stderr.write('\u001b[3')
+      process.stderr.write('1mFailed: sk-abcdef')
+      process.stderr.write('ghijklmnop\u001b[0m\n')
+      send({
+        id,
+        error: {
+          code: -32603,
+          message: '\u001b[31mthread fixture-busy already has an active writer\u001b[0m'
+        }
+      })
+      return
+    }
     resumedThreads.add(params.threadId)
     send({ id, result: { thread: { id: params.threadId } } })
     return

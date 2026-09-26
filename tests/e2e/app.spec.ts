@@ -96,6 +96,91 @@ test.afterEach(async () => {
   }
 })
 
+test('updates one live response in place and escapes provider markup', async () => {
+  const harness = await launch()
+  const projectId = await createProject(harness.page, harness.projectDirectory)
+  await harness.page.getByRole('button', { name: 'Jobs', exact: true }).click()
+  await harness.page.getByRole('button', { name: 'New job' }).click()
+  await harness.page.getByLabel('Project').selectOption(projectId)
+  await harness.page.getByLabel('Provider').selectOption('fake')
+  await harness.page.getByLabel('Objective').fill('[stream] show a coherent response')
+  await harness.page.getByRole('button', { name: 'Create and start job' }).click()
+  await expect(harness.page.locator('.live-message')).toHaveCount(1)
+  await expect(harness.page.locator('.live-message')).toContainText('streaming')
+  await expect(harness.page.locator('.live-message .conversation-text')).toContainText(
+    'One coherent'
+  )
+  await expect(harness.page.locator('.live-message')).toContainText('completed')
+  await expect(harness.page.locator('.live-message')).toHaveCount(1)
+  await expect(harness.page.locator('.live-message .conversation-text')).toContainText(
+    'Second line <script> stays harmless text.'
+  )
+  await expect(harness.page.locator('.conversation-panel script')).toHaveCount(0)
+  const jobs = await harness.page.evaluate(async () =>
+    (globalThis as unknown as { orchestrator: OrchestratorApi }).orchestrator.listJobs()
+  )
+  expect(
+    (await detail(harness.page, jobs[0]!.id)).events.some((event) =>
+      event.message.includes('One coherent response')
+    )
+  ).toBe(false)
+  await harness.page.screenshot({
+    path: test.info().outputPath('coherent-conversation.png'),
+    fullPage: true
+  })
+})
+
+test('shows busy-session review without automatic retry or simulated power', async () => {
+  const harness = await launch()
+  const projectId = await createProject(harness.page, harness.projectDirectory)
+  const jobId = await createJob(
+    harness.page,
+    jobInput(projectId, '[busy] wait for the external client', 'shutdown')
+  )
+  await expect.poll(async () => (await detail(harness.page, jobId)).job.state).toBe('NEEDS_REVIEW')
+  await harness.page.getByRole('button', { name: 'Jobs', exact: true }).click()
+  await harness.page.getByText('[busy] wait for the external client', { exact: true }).click()
+  await expect(harness.page.getByRole('button', { name: 'Retry when available' })).toBeVisible()
+  await expect(harness.page.getByText(/Orchestrator will not remove locks/)).toBeVisible()
+  const result = await detail(harness.page, jobId)
+  expect(result.attempts).toHaveLength(1)
+  expect(result.schedules).toHaveLength(0)
+  expect(result.job.automaticAttempts).toBe(0)
+  await harness.page.screenshot({
+    path: test.info().outputPath('busy-session-review.png'),
+    fullPage: true
+  })
+})
+
+test('loads saved output and keeps legacy fragments collapsed but accessible', async () => {
+  const harness = await launch()
+  const jobId = await harness.page.evaluate(async () => {
+    const api = (globalThis as unknown as { orchestrator: OrchestratorApi }).orchestrator
+    return (
+      await api.continueCodexThread({
+        threadId: 'fixture-codex-thread-active',
+        objective: '[legacy] inspect historical output',
+        retryPolicy: { maxAutomaticAttempts: 0, baseDelaySeconds: 5, maxDelaySeconds: 5 },
+        verification: [],
+        powerPolicy: { action: 'none', countdownSeconds: 60, preventSleepWhileActive: true }
+      })
+    ).id
+  })
+  await expect.poll(async () => (await detail(harness.page, jobId)).job.state).toBe('COMPLETED')
+  await harness.page.getByRole('button', { name: 'Jobs', exact: true }).click()
+  await harness.page.getByText('[legacy] inspect historical output', { exact: true }).click()
+  await expect(harness.page.locator('.conversation-panel')).toContainText(
+    'This fixture verifies the read-only history UI without contacting Codex.'
+  )
+  await expect(harness.page.getByText('legacy-frag-one', { exact: true })).toBeHidden()
+  await harness.page.locator('.raw-provider-activity summary').click()
+  await expect(harness.page.getByText('legacy-frag-one', { exact: true })).toBeVisible()
+  expect(
+    (await detail(harness.page, jobId)).events.some((event) => event.message === 'legacy-frag-one')
+  ).toBe(true)
+  expect((await detail(harness.page, jobId)).attempts).toHaveLength(1)
+})
+
 test('creates and completes a job through the desktop UI', async () => {
   const harness = await launch()
   const projectId = await createProject(harness.page, harness.projectDirectory)

@@ -32,6 +32,38 @@ async function waitFor(
 }
 
 describe('Codex app-server JSONL transport', () => {
+  it('classifies external ownership without submitting a turn or forcing a new thread', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'codex-busy-test-'))
+    temporaryDirectories.push(directory)
+    const callLog = join(directory, 'rpc-methods.log')
+    const provider = new CodexAppServerProvider(
+      [resolve('tests/fixtures/fake-codex-app-server.mjs'), callLog],
+      async () => [process.execPath]
+    )
+    const events: ProviderEvent[] = []
+    provider.subscribe((event) => events.push(event))
+    try {
+      await expect(
+        provider.resume({
+          sessionId: 'fixture-busy',
+          objective: 'read only',
+          continuation: 'continue',
+          cwd: process.cwd(),
+          profile: 'default'
+        })
+      ).rejects.toMatchObject({ code: 'PROVIDER_BUSY' })
+      await waitFor(events, (event) => event.type === 'activity')
+      expect(JSON.stringify(events)).not.toContain('abcdefghijklmnop')
+      expect(JSON.stringify(events)).not.toContain('\\u001b')
+      const methods = await readFile(callLog, 'utf8')
+      expect(methods).toContain('thread/resume')
+      expect(methods).not.toContain('turn/start')
+      expect(methods).not.toContain('thread/start')
+      expect(methods).not.toContain('turn/interrupt')
+    } finally {
+      await provider.disconnect()
+    }
+  })
   it('handshakes, starts, resumes, interrupts, and handles approval responses', async () => {
     const provider = new CodexAppServerProvider(
       [resolve('tests/fixtures/fake-codex-app-server.mjs')],

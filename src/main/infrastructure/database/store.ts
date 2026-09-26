@@ -782,7 +782,7 @@ export class OrchestrationStore {
     return Number(row.count)
   }
 
-  getJobDetail(id: string): JobDetail {
+  getJobDetail(id: string): Omit<JobDetail, 'conversation'> {
     const job = this.getJob(id)
     const project = this.getProject(job.projectId)
     const attempts = this.database

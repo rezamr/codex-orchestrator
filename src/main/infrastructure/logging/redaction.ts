@@ -1,3 +1,5 @@
+import { stripVTControlCharacters } from 'node:util'
+
 const SECRET_KEY_PATTERN =
   /(?:token|secret|password|authorization|cookie|api[-_]?key|access[-_]?token|refresh[-_]?token)/i
 const SECRET_VALUE_PATTERNS = [
@@ -9,7 +11,7 @@ const SECRET_VALUE_PATTERNS = [
 export function redactString(value: string): string {
   return SECRET_VALUE_PATTERNS.reduce(
     (current, pattern) => current.replace(pattern, '[REDACTED]'),
-    value
+    stripVTControlCharacters(value)
   )
 }
 

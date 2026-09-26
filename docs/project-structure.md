@@ -16,7 +16,7 @@ codex-orchestrator/
 ├── scripts/                         # Build/support scripts
 ├── src/
 │   ├── main/
-│   │   ├── application/             # Orchestrator, scheduler, verification
+│   │   ├── application/             # Orchestrator, scheduler, verification, ephemeral conversation buffer
 │   │   ├── domain/                  # State machine and policy logic
 │   │   ├── infrastructure/
 │   │   │   ├── database/            # SQLite store and numbered migrations

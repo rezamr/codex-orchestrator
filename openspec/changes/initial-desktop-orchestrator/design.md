@@ -2,6 +2,12 @@
 
 ## Context
 
+### Alpha.3 conversation and ownership correction
+
+Normalize agent-message starts, deltas, and completions into provider-neutral message events keyed by turn/item identity. Accumulate them in bounded process memory, redact assembled text before transport, and throttle a dedicated job-id output notification. Refresh only the selected job detail, not a full snapshot or CLI probe per streaming update. Completed item text replaces accumulated deltas. Never store these transcripts in SQLite or diagnostics. Job detail offers a read-only saved transcript using the job's provider/session, independently of the current default provider; after restart this is the source of conversation text. Keep legacy audit rows intact, but put verbose raw provider activity in an expandable section instead of guessing how old tokens should be merged. Render text with Vue escaping, not HTML, and explicit incomplete/truncated/unavailable states.
+
+Classify the observed active-writer rejection as `PROVIDER_BUSY`. A rejected resume moves the job to `NEEDS_REVIEW`, cancels pending automatic actions, retains its session, and permits explicit manual retry after the other client releases ownership. Record the confirmed pre-turn rejection as a typed operational event and a stable attempt stop-reason marker, independent of audit retention; on manual retry retain the original unsent instruction, not a generic continuation prompt. Do not infer that an uncertain transport failure never submitted a turn. Never remove locks, terminate another client, force resume, or silently create another conversation. Strip terminal controls before redaction of diagnostics/errors and sanitize legacy event text on read without rewriting the user's database. Ship alpha.3 with the same schema version and new unsigned Windows artifacts.
+
 The product is a privileged local desktop application wrapped around long-running Codex work. It must coordinate UI, local process supervision, durable scheduling, provider sessions, verification commands, and optional OS power actions while remaining recoverable after crashes/restarts.
 
 ## Goals
@@ -79,7 +85,7 @@ On Windows, do not pass batch wrappers such as `npm.cmd` directly to `execFile`.
 
 ### Desktop conversation navigation and continuation clarity
 
-The job form distinguishes a new conversation from an explicit existing-thread target and displays the selected thread identity. History can route directly into that continuation form. A narrow validated IPC operation opens known local Codex threads through OpenAI's documented `codex://threads/<thread-id>` deep link. It does not control ChatGPT's UI, send prompts, or claim live cross-client refresh. Agent-message token deltas are not appended as individual audit events; completed message items are the authoritative readable timeline entries.
+The job form distinguishes a new conversation from an explicit existing-thread target and displays the selected thread identity. History can route directly into that continuation form. A narrow validated IPC operation opens known local Codex threads through OpenAI's documented `codex://threads/<thread-id>` deep link. It does not control ChatGPT's UI, send prompts, or claim live cross-client refresh. Agent-message deltas and completed items are projected in the separate bounded memory-only conversation view; neither is appended as a transcript audit entry. Legacy audit rows remain accessible unchanged.
 
 ### Power management
 

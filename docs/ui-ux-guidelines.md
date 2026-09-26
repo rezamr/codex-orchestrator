@@ -60,6 +60,8 @@ Prefer a compact operational summary over decorative KPI cards.
 
 ## Job detail
 
+Conversation output is separate from the operational timeline. Render one escaped plain-text response per provider item, updating in place, with incomplete/truncated states. Offer read-only saved retrieval and visible failure feedback. Keep verbose legacy activity collapsed but accessible; never hide lifecycle, command, approval, verification, or power decisions there. Busy external conversations explain ownership and show **Retry when available**, not automatic takeover or an ordinary completion/failure message.
+
 Job detail should contain:
 
 - objective,

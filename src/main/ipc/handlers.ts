@@ -73,6 +73,9 @@ export function registerIpcHandlers(orchestrator: Orchestrator): () => void {
   handle(IPC_CHANNELS.jobsDetail, (_event, jobId: unknown) =>
     orchestrator.getJobDetail(idSchema.parse(jobId))
   )
+  handle(IPC_CHANNELS.jobsConversation, (_event, jobId: unknown) =>
+    orchestrator.readJobConversation(idSchema.parse(jobId))
+  )
   handle(IPC_CHANNELS.jobsAction, (_event, input: unknown) => {
     const parsed = lifecycleActionSchema.parse(input)
     return orchestrator.jobAction(parsed.jobId, parsed.action)

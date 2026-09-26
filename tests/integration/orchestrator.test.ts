@@ -8,6 +8,8 @@ import { StructuredLogger } from '@main/infrastructure/logging/logger'
 import { FakePowerAdapter } from '@main/infrastructure/platform/power-adapter'
 import { FakeProvider } from '@main/infrastructure/providers/fake-provider'
 import type { JobState, PowerAction } from '@shared/types/domain'
+import { AppError } from '@shared/errors'
+import type { ProviderResumeRequest } from '@main/infrastructure/providers/provider'
 
 const directories: string[] = []
 const instances: Array<{ orchestrator: Orchestrator; store: OrchestrationStore }> = []
@@ -61,6 +63,107 @@ function jobInput(projectId: string, objective: string, action: PowerAction = 'n
 }
 
 describe('orchestrator fake-provider workflows', () => {
+  it('requires review for an external writer, retains the session, and retries only manually', async () => {
+    const { orchestrator, store, power, project } = await setup()
+    const job = store.createJob({
+      ...jobInput(project.id, 'Continue safely', 'shutdown'),
+      startImmediately: false
+    })
+    store.saveSession(job.id, 'fake', 'fixture-codex-thread-active')
+    let busy = true
+    const realResume = FakeProvider.prototype.resume
+    const resumeSpy = vi.spyOn(FakeProvider.prototype, 'resume').mockImplementation(async function (
+      this: FakeProvider,
+      request: ProviderResumeRequest
+    ) {
+      if (busy)
+        throw new AppError(
+          'PROVIDER_BUSY',
+          'This conversation is owned by another active Codex client. No instruction was sent.'
+        )
+      return realResume.call(this, request)
+    })
+    try {
+      await orchestrator.jobAction(job.id, 'start')
+      await waitForState(store, job.id, 'NEEDS_REVIEW')
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      expect(resumeSpy).toHaveBeenCalledTimes(1)
+      expect(store.getJobDetail(job.id).sessions[0]?.externalId).toBe('fixture-codex-thread-active')
+      expect(store.getJobDetail(job.id).attempts[0]?.providerTurnId).toBeNull()
+      expect(store.listPendingSchedules()).toHaveLength(0)
+      expect(store.getJob(job.id).automaticAttempts).toBe(0)
+      expect(power.actions).toHaveLength(0)
+      // Audit retention must not erase the proof that the original instruction was never sent.
+      store.database
+        .prepare("DELETE FROM job_events WHERE job_id = ? AND type = 'provider.busy'")
+        .run(job.id)
+      busy = false
+      await orchestrator.jobAction(job.id, 'retry')
+      await waitForState(store, job.id, 'COMPLETED')
+      expect(resumeSpy).toHaveBeenCalledTimes(2)
+      expect(resumeSpy.mock.calls[1]?.[0].continuation).toBe('Continue safely')
+      expect(store.getJobDetail(job.id).sessions).toHaveLength(1)
+      const countdown = store.listPendingSchedules()[0]
+      if (countdown) orchestrator.cancelPowerCountdown(countdown.id)
+    } finally {
+      resumeSpy.mockRestore()
+    }
+  })
+
+  it('keeps live transcript out of all persisted rows and diagnostic output', async () => {
+    const { orchestrator, store, project } = await setup()
+    const job = await orchestrator.createJob(jobInput(project.id, '[stream] coherent response'))
+    await waitForState(store, job.id, 'COMPLETED')
+    const messages = orchestrator.getJobDetail(job.id).conversation.messages
+    expect(messages).toHaveLength(1)
+    expect(messages[0]?.text).toContain('One coherent response.')
+    expect(messages[0]?.status).toBe('completed')
+    const tables = store.database
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
+      .all() as Array<{ name: string }>
+    const rows = tables.flatMap(({ name }) =>
+      store.database.prepare(`SELECT * FROM "${name.replaceAll('"', '""')}"`).all()
+    )
+    expect(JSON.stringify(rows)).not.toContain('One coherent response.')
+    expect(JSON.stringify(await orchestrator.diagnostics('test'))).not.toContain(
+      'One coherent response.'
+    )
+  })
+
+  it('reads the saved job transcript with its own provider and sanitizes legacy audit without rewriting it', async () => {
+    const { store, project } = await setup()
+    const modes: string[] = []
+    const reader = new Orchestrator(
+      store,
+      new FakePowerAdapter(),
+      new StructuredLogger(),
+      () => undefined,
+      (mode) => {
+        modes.push(mode)
+        return new FakeProvider()
+      }
+    )
+    // This reader shares the store but never initializes a scheduler or starts work.
+    const job = store.createJob({
+      ...jobInput(project.id, 'Legacy review'),
+      startImmediately: false
+    })
+    store.saveSession(job.id, 'fake', 'fixture-codex-thread-active')
+    store.updateSettings({ providerMode: 'codex' })
+    const oldText = '\u001b[31mlegacy diagnostic\u001b[0m'
+    store.appendEvent(job.id, null, 'activity', 'info', oldText)
+    const transcript = await reader.readJobConversation(job.id)
+    expect(modes).toEqual(['fake'])
+    expect(transcript.turns[0]?.items[1]?.text).toContain('without contacting Codex')
+    expect(
+      reader.getJobDetail(job.id).events.find((event) => event.type === 'activity')?.message
+    ).toBe('legacy diagnostic')
+    expect(
+      store.getJobDetail(job.id).events.find((event) => event.type === 'activity')?.message
+    ).toBe(oldText)
+    expect(store.getLatestAttempt(job.id)).toBeNull()
+    await reader.shutdown()
+  })
   it('reruns only checks after failure, rejects duplicates, and never repeats provider work', async () => {
     const { orchestrator, store, power, project, projectPath } = await setup()
     const job = await orchestrator.createJob({

@@ -6,6 +6,30 @@ Define programmatic Codex integration and stable provider behavior without coupl
 
 ## ADDED Requirements
 
+### Requirement: External writer conflicts require operator review
+
+The provider SHALL classify an app-server active-writer rejection as a busy provider condition rather than a generic protocol failure. Orchestrator SHALL retain the session, require review, and not schedule automatic retries or displace external ownership.
+
+#### Scenario: Another Codex client owns the adopted thread
+
+- **WHEN** thread resume is rejected because the thread already has an active writer
+- **THEN** the job enters Needs review with an actionable explanation, no turn is submitted, no new conversation is created, and only the user may retry after ownership is released
+- **AND** a manual retry of this confirmed pre-turn rejection retains the original unsent user instruction rather than replacing it with a generic continuation prompt
+
+### Requirement: Agent output is an ephemeral coherent projection
+
+Agent output SHALL be aggregated by turn and item identity in bounded memory, with completed text authoritative. Transcripts SHALL NOT be copied into SQLite or diagnostics. Terminal controls SHALL be removed from diagnostics and errors before presentation.
+
+#### Scenario: Streamed response arrives in fragments
+
+- **WHEN** several deltas arrive for one agent message followed by its completion
+- **THEN** one message updates in place, final text replaces the deltas, and no token-per-event transcript is persisted
+
+#### Scenario: Saved output is read after restart
+
+- **WHEN** the operator requests a job's saved conversation
+- **THEN** its own provider and stored session are used for a read-only thread read without resume or turn submission, with truncation and retrieval failure visible
+
 ### Requirement: Programmatic Codex control
 
 The system SHALL integrate with Codex through a supported programmatic provider interface and MUST NOT depend on Codex UI scraping or simulated mouse/keyboard input.

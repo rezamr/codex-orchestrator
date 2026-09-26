@@ -11,6 +11,7 @@ const api: OrchestratorApi = {
   listJobs: (includeArchived) => ipcRenderer.invoke(IPC_CHANNELS.jobsList, includeArchived),
   createJob: (input) => ipcRenderer.invoke(IPC_CHANNELS.jobsCreate, input),
   getJobDetail: (jobId) => ipcRenderer.invoke(IPC_CHANNELS.jobsDetail, jobId),
+  readJobConversation: (jobId) => ipcRenderer.invoke(IPC_CHANNELS.jobsConversation, jobId),
   jobAction: (jobId, action) => ipcRenderer.invoke(IPC_CHANNELS.jobsAction, { jobId, action }),
   respondToApproval: (approvalId, decision, input) =>
     ipcRenderer.invoke(IPC_CHANNELS.approvalsRespond, { approvalId, decision, input }),
@@ -27,6 +28,13 @@ const api: OrchestratorApi = {
   getDiagnostics: () => ipcRenderer.invoke(IPC_CHANNELS.diagnosticsSnapshot),
   exportDiagnostics: () => ipcRenderer.invoke(IPC_CHANNELS.diagnosticsExport),
   openExternal: (url) => ipcRenderer.invoke(IPC_CHANNELS.externalOpen, { url }),
+  onConversationChanged: (listener) => {
+    const wrapped = (_event: Electron.IpcRendererEvent, jobId: unknown): void => {
+      if (typeof jobId === 'string') listener(jobId)
+    }
+    ipcRenderer.on(IPC_CHANNELS.conversationChanged, wrapped)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.conversationChanged, wrapped)
+  },
   onStateChanged: (listener) => {
     const wrapped = (_event: Electron.IpcRendererEvent, value: unknown): void =>
       listener(value as never)

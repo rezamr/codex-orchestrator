@@ -2,6 +2,23 @@
 
 All notable user-facing changes are recorded here. The project follows Semantic Versioning after its first stable release.
 
+## [0.1.0-alpha.3] - 2026-09-26
+
+### Fixed
+
+- Classify rejected resume due to an external active writer as Needs review with manual retry. No instruction is sent, no automatic retry scheduled, and no Codex lock or other client is disturbed. Confirmed pre-turn rejections preserve the original unsent user instruction on retry.
+- Strip terminal escapes before diagnostic redaction, including stderr split across chunks. Sanitize existing job details on read without rewriting the database.
+- Separate coherent conversation output from operational audit: streaming deltas update one memory-only message, and authoritative completion replaces them. New transcript messages are not copied into SQLite or diagnostics.
+- Keep legacy token-sized activity rows in a collapsed, accessible raw activity section. Saved conversation retrieval reads the job's own provider/session, independent of the default provider setting, without resuming it.
+- Make truncated and interrupted output visible, bound memory, and render provider text with Vue escaping rather than executable HTML.
+
+### Changed
+
+- Bump application, handshake, lockfile, and Windows installer/portable metadata to alpha.3. SQLite schema stays version 3; no data reset or migration.
+- Plain-text conversation display is not a full Markdown or pixel-identical Codex UI clone. Saved/live views are intentionally bounded; older raw audit rows are preserved.
+- Validation: strict OpenSpec, typecheck, lint, formatting, 65 unit/integration tests including migrations, 12 fake-provider/fake-power Electron E2E scenarios, production build, and unsigned Windows NSIS/portable packaging passed. The opt-in live read-only Codex check passed without a turn. npm audit against the public registry found zero vulnerabilities; the configured mirror did not support auditing. Packaged version and main bundle were checked against the final build.
+- Installer execution/real database upgrade, real-client ownership release, desktop navigation, and controlled power actions remain manual gates. Packages remain unsigned; no real turn or power action was run during this correction.
+
 ## [0.1.0-alpha.2] - 2026-09-25
 
 ### Fixed

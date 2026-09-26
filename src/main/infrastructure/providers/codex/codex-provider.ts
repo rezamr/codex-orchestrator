@@ -39,6 +39,7 @@ interface RpcMessage {
 }
 
 interface PendingRequest {
+  method: string
   resolve: (value: any) => void
   reject: (reason: Error) => void
   timer: NodeJS.Timeout
@@ -206,7 +207,7 @@ function threadItemText(item: Record<string, unknown>, type: string): string {
     if (typeof item.result === 'string') lines.push(item.result)
     if (typeof item.error === 'string') lines.push(item.error)
   }
-  return redactString(lines.join('\n\n')).slice(0, MAX_THREAD_ITEM_CHARS)
+  return redactString(lines.join('\n\n'))
 }
 
 function mapThreadDetail(value: unknown, summary: CodexThreadSummary): CodexThreadDetail {
@@ -227,6 +228,10 @@ function mapThreadDetail(value: unknown, summary: CodexThreadSummary): CodexThre
         const type = stringValue(item.type, 100) ?? 'unknown'
         let text = threadItemText(item, type)
         if (!text) continue
+        if (text.length > MAX_THREAD_ITEM_CHARS) {
+          text = text.slice(0, MAX_THREAD_ITEM_CHARS)
+          truncated = true
+        }
         if (remaining <= 0) {
           truncated = true
           break
@@ -386,8 +391,9 @@ export class CodexAppServerProvider implements AgentProvider {
 
     const reader = createInterface({ input: child.stdout })
     reader.on('line', (line) => this.handleLine(line))
-    child.stderr.on('data', (chunk: Buffer) => {
-      const message = redactString(chunk.toString('utf8').trim()).slice(0, 2_000)
+    const diagnostics = createInterface({ input: child.stderr })
+    diagnostics.on('line', (line) => {
+      const message = redactString(line.trim()).slice(0, 2_000)
       if (message) this.emit({ type: 'activity', message: `Codex diagnostic: ${message}` })
     })
 
@@ -396,7 +402,7 @@ export class CodexAppServerProvider implements AgentProvider {
         clientInfo: {
           name: 'codex_orchestrator',
           title: 'Codex Orchestrator',
-          version: '0.1.0-alpha.1'
+          version: '0.1.0-alpha.3'
         },
         capabilities: null
       })
@@ -638,7 +644,7 @@ export class CodexAppServerProvider implements AgentProvider {
         this.pending.delete(id)
         reject(new AppError('PROTOCOL_ERROR', `Codex request timed out: ${method}`))
       }, 30_000)
-      this.pending.set(id, { resolve, reject, timer })
+      this.pending.set(id, { resolve, reject, timer, method })
       this.write({ id, method, params })
     })
   }
@@ -675,10 +681,15 @@ export class CodexAppServerProvider implements AgentProvider {
       clearTimeout(pending.timer)
       this.pending.delete(message.id)
       if (message.error) {
+        const errorText = redactString(message.error.message ?? 'Codex request failed.')
+        const busy =
+          pending.method === 'thread/resume' && /already has an active writer/i.test(errorText)
         pending.reject(
           new AppError(
-            'PROTOCOL_ERROR',
-            redactString(message.error.message ?? 'Codex request failed.'),
+            busy ? 'PROVIDER_BUSY' : 'PROTOCOL_ERROR',
+            busy
+              ? 'This conversation is owned by another active Codex client. Wait for that client to release it, then retry manually. No instruction was sent.'
+              : errorText,
             {
               code: message.error.code
             }

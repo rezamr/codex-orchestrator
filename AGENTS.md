@@ -41,6 +41,7 @@ Do not archive a change while required tests, verification checks, or documentat
 - Primary local provider: Codex app-server.
 - Discover and version-check the supported Codex CLI automatically. Never ask users to select or launch the ChatGPT GUI executable, and never inspect protected Windows app packages.
 - Keep account/usage/history reads read-only. Do not persist account email, authentication material, or Codex transcripts in Orchestrator's SQLite database; request state-database-only thread listings to avoid scan-and-repair side effects.
+- Keep streaming conversation projections bounded and ephemeral. Treat active-writer rejection as review, never forced takeover or automatic retry. Preserve the unsent original instruction only when a pre-turn rejection is confirmed.
 - Never control Codex by scraping its UI or simulating mouse/keyboard input.
 - Persist durable task state in SQLite behind a repository/service abstraction.
 - Design migrations before relying on persisted schema.

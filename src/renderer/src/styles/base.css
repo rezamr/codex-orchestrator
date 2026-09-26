@@ -1155,3 +1155,22 @@ tbody tr:hover {
     transition-duration: 0.01ms !important;
   }
 }
+
+.conversation-panel .section-heading {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.conversation-message {
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+}
+.conversation-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.65;
+  margin-top: 10px;
+}
+.raw-provider-activity summary {
+  cursor: pointer;
+  padding: 12px 0;
+}

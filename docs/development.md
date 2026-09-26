@@ -129,6 +129,8 @@ The application opens an existing thread using OpenAI's documented ChatGPT deskt
 
 ## Logging
 
+`ConversationBuffer` is ephemeral, capped at 20 jobs / 100 messages / 64,000 characters per message / 2,000,000 characters per job. Streaming updates are throttled to 250 ms; final items replace fragments. Never export or persist this buffer. Job saved-output retrieval uses validated `jobs:conversation` and the job's provider/session, not the default provider setting. `PROVIDER_BUSY` is a confirmed pre-turn ownership rejection: retain the session and unsent instruction, require review, and never auto-retry or remove Codex locks. Tests cover the JSONL rejection and safe manual retry without contacting real Codex.
+
 Use structured logging and redaction from day one. Do not add temporary logs that print full provider payloads or process environments.
 
 ## Pull request readiness

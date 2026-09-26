@@ -1,13 +1,20 @@
 # Roadmap
 
-This roadmap describes direction, not release dates. Completed capabilities refer to the current `0.1.0-alpha.2` implementation; they do not imply that every platform or real-world power action has been manually validated.
+This roadmap describes direction, not release dates. Completed capabilities refer to the current `0.1.0-alpha.3` implementation; they do not imply that every platform or real-world power action has been manually validated.
+
+## Added in `0.1.0-alpha.3`
+
+- Busy external-writer rejection becomes Needs review with manual retry, never lock removal or forced takeover.
+- Coherent, bounded memory-only streaming output and read-only saved job transcripts, separate from operational audit.
+- Collapsed legacy raw activity and terminal-control sanitization without rewriting existing databases.
+- Plain-text escaped conversation presentation; full Markdown rendering remains future work.
 
 ## Added in `0.1.0-alpha.2`
 
 - Explicit new/existing conversation targeting and History continuation.
 - Official ChatGPT desktop thread deep-link navigation with narrow validated IPC.
 - Safe Windows npm verification, failed-launch evidence, and checks-only retry/recovery.
-- Readable completed-message audit entries rather than token-per-row noise.
+- Completed-message audit entries for new messages rather than token-per-row noise (superseded by the separate ephemeral conversation view in alpha.3; old audit rows were not rewritten).
 
 ## Implemented in `0.1.0-alpha.0`
 

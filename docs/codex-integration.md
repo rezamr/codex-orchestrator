@@ -1,5 +1,11 @@
 # Codex Integration
 
+## Alpha.3 output and external ownership
+
+Follow the [official app-server item lifecycle](https://learn.chatgpt.com/docs/app-server): agent deltas append to the same item, and item completion supplies authoritative text. Orchestrator projects these into one bounded memory-only message rather than recording transcript fragments in SQLite. Saved job output uses read-only thread retrieval with that job's provider/session, even if the default provider setting changes. Display is escaped plain text with explicit truncation and incomplete states; full Codex Markdown/tool-card parity is not claimed.
+
+`thread/read` does not acquire writer ownership. Connection-local status such as `notLoaded` is not evidence that another client has released a thread. A resume rejection saying the thread already has an active writer becomes `PROVIDER_BUSY` and Needs review without automatic retry, new-thread creation, or a `turn/start`. Retry is explicit after the external owner releases it. No force-takeover, lock-removal, or cross-client handoff API is assumed.
+
 ## Decision
 
 The primary local integration is **Codex app-server**, behind a provider abstraction.
@@ -190,9 +196,9 @@ Official OpenAI documentation distinguishes `thread/start` (new history) from `t
 
 App-server is a local Codex integration, not a general API for ChatGPT web conversations. No automatic cross-client live refresh or external-client exclusivity is claimed. A turn finishing also does not prove that the original engineering objective was fulfilled: operator review and configured verification still matter, and a model may report a genuine external blocker.
 
-The official event contract identifies `item/completed` as authoritative. Agent-message deltas are therefore not persisted as individual word/token audit rows; completed messages are displayed once, bounded to 2,000 characters. The on-demand History transcript remains available for fuller context.
+The official event contract identifies `item/completed` as authoritative. Alpha.2 stopped recording new word/token audit rows but retained bounded completed-message audit entries. Alpha.3 moves new agent text entirely into the separate ephemeral conversation view, with authoritative completion, explicit limits, and read-only saved retrieval. Legacy audit entries are preserved, collapsed, and sanitized on read.
 
-## Official references checked for alpha.2
+## Official references checked for alpha.2 / alpha.3
 
 - [OpenAI: Codex as a platform](https://developers.openai.com/blog/codex-as-a-platform)
 - [OpenAI: App-server protocol, start/resume/read, and item lifecycle](https://learn.chatgpt.com/docs/app-server)

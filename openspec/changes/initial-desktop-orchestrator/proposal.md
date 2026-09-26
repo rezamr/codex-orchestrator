@@ -2,6 +2,8 @@
 
 ## Why
 
+The alpha.3 correction addresses external-writer conflicts, terminal escapes in diagnostics, and fragmented historical output. Conversation output must be a bounded read-only/in-memory projection separate from the operational audit. External Codex ownership must never be displaced automatically.
+
 Codex Orchestrator needs a complete first implementation that can manage durable Codex work from a graphical desktop application without requiring normal users to operate a terminal. Long-running work must remain observable, recover safely from expected interruptions, verify completion with evidence, and optionally perform carefully guarded system power actions.
 
 ## Goals

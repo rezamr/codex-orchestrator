@@ -30,13 +30,34 @@ export function normalizeCodexNotification(
     ]
   }
   if (method === 'item/agentMessage/delta') {
-    // Deltas are fragments, not audit entries. item/completed supplies the authoritative message.
-    return []
+    return typeof params.itemId === 'string' && typeof params.delta === 'string'
+      ? [
+          {
+            type: 'message.updated',
+            itemId: params.itemId,
+            turnId: typeof params.turnId === 'string' ? params.turnId : '',
+            text: params.delta,
+            mode: 'delta'
+          }
+        ]
+      : []
   }
   if (method === 'item/started' || method === 'item/completed') {
     const item = (params.item ?? {}) as Record<string, unknown>
     const type = typeof item.type === 'string' ? item.type : 'activity'
-    if (type === 'agentMessage' && method === 'item/started') return []
+    if (type === 'agentMessage') {
+      return typeof item.id === 'string'
+        ? [
+            {
+              type: 'message.updated',
+              itemId: item.id,
+              turnId: typeof params.turnId === 'string' ? params.turnId : '',
+              text: typeof item.text === 'string' ? item.text : '',
+              mode: method === 'item/completed' ? 'complete' : 'start'
+            }
+          ]
+        : []
+    }
     if (type === 'commandExecution') {
       const command = Array.isArray(item.command)
         ? item.command.map(String).join(' ')

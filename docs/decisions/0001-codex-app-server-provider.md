@@ -21,6 +21,8 @@ The `0.1.0-alpha.2` UI makes that destination explicit before submission. Naviga
 
 ## Consequences
 
+Alpha.3 treats the app-server active-writer rejection as a review condition, not a request to force ownership. Read-only status does not establish cross-client exclusivity. A typed pre-turn rejection retains the original unsent instruction on manual retry. Agent-message identity and authoritative completion follow the documented item lifecycle; transcript output is ephemeral/read-through, not a database audit entity.
+
 - The application can use a documented programmatic lifecycle rather than screen scraping.
 - Raw app-server protocol changes are contained within one adapter.
 - Compatibility testing is required because the integration surface may evolve.

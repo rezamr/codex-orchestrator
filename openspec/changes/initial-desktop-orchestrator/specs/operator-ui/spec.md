@@ -6,6 +6,20 @@ Define a clear, professional, accessible desktop control surface that makes unat
 
 ## ADDED Requirements
 
+### Requirement: Job conversation and audit are distinct
+
+Job detail SHALL display coherent escaped conversation text separately from lifecycle decisions, commands, approvals, and verification. Verbose legacy provider activity SHALL remain accessible in a collapsed section without rewriting or heuristically merging old records.
+
+#### Scenario: Legacy job contains token-sized activity rows
+
+- **WHEN** the operator opens that job
+- **THEN** the main timeline shows operational decisions, old raw rows are available on expansion, and saved conversation output can be fetched read-only
+
+#### Scenario: Conversation is busy or output is incomplete
+
+- **WHEN** a writer conflict or interrupted/truncated output is present
+- **THEN** the UI explains the limitation and offers safe explicit actions without implying successful completion or automatic ownership transfer
+
 ### Requirement: Operational navigation
 
 The system SHALL provide clear navigation for Dashboard, Projects, Jobs, History/Sessions, Activity, Automations, and Settings or equivalent grouped destinations.

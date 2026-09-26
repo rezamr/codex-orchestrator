@@ -14,6 +14,16 @@ For `0.1.0-alpha.1`, visually confirm after launch that Dashboard has a Codex co
 
 These checks do not replace the controlled real-Codex or real-power procedures below.
 
+## Alpha.3 safe correction checks
+
+1. Close Orchestrator normally before upgrading; do not end another Codex client's work just to install this package. Install the new alpha.3 package; confirm Settings diagnostics reports alpha.3. Existing schema-3 data should remain, with no reset or migration.
+2. Use a disposable project, Simulated provider, no checks, and power action **none**. Submit `[stream] show a coherent response`: one Codex message should update in place, then show completed. This fake response does not consume Codex usage.
+3. Use the simulated objective `[busy] external owner`: confirm Needs review, **Retry when available**, no automatic retry schedule, and no power countdown. It stays simulated-busy on manual retry by design; this is not a way to acquire real ownership.
+4. Open an older job with word-sized activity rows. They should remain under collapsed **Raw provider activity**. **Load saved conversation** must read the original session without sending a turn, show retrieval failures/truncation, and leave old records intact. Saved output is escaped plain text, not a full Markdown clone.
+5. For a real external-writer conflict, do not force takeover or remove locks. After the external client actually releases the thread, manually retry in a controlled test only. A confirmed pre-turn busy rejection retains the original unsent instruction; uncertain transport failures must not be treated as proof no turn was submitted.
+
+Installer execution, upgrade with a user's real database, and controlled real-client ownership release remain manual checks, not claims based on fake-provider tests.
+
 ## Record for every run
 
 - application version and commit;

@@ -168,6 +168,10 @@ The old user-entered executable override is removed by migration 3. The renderer
 
 ## Event normalization
 
+In alpha.3, `message.updated` is a provider-neutral output projection, not a durable audit entry. `ConversationBuffer` aggregates by turn/item in memory, bounds retained jobs/messages/text, and redacts assembled text before typed job-detail transport. A dedicated job-id notification updates only the selected detail at most every 250 ms; it does not trigger a full snapshot or CLI probe per streaming update. Completion replaces deltas; interrupted messages are marked incomplete. Job detail can also invoke the validated `jobs:conversation` read with a job id; main resolves that job's provider/session and performs only `thread/read`. A separate temporary provider is disconnected afterward, with no resume, turn, or database transcript write. Vue renders escaped plain text, not provider HTML. Legacy `activity` rows remain available in a collapsed raw audit section and are sanitized on read, not migrated or deleted.
+
+An observed external-writer rejection of `thread/resume` is `PROVIDER_BUSY`, causing `NEEDS_REVIEW` and cancellation of pending automatic actions. Local thread status cannot prove absence of an external writer. The session remains linked, with an explicit manual retry only; no lock deletion or silent thread replacement exists.
+
 Provider-specific events are translated into stable application events such as:
 
 - session.started,

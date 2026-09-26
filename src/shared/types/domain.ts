@@ -277,6 +277,7 @@ export interface PowerCountdown {
 }
 
 export interface JobDetail {
+  conversation: JobConversation
   job: Job
   project: Project
   attempts: Attempt[]
@@ -286,6 +287,19 @@ export interface JobDetail {
   approvals: Approval[]
   verificationRuns: VerificationRun[]
   powerCountdown: PowerCountdown | null
+}
+
+export interface ConversationMessage {
+  id: string
+  turnId: string
+  text: string
+  status: 'streaming' | 'completed' | 'interrupted'
+  truncated: boolean
+}
+
+export interface JobConversation {
+  messages: ConversationMessage[]
+  truncated: boolean
 }
 
 export interface DashboardSnapshot {

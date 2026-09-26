@@ -1,6 +1,6 @@
 import { realpath, stat } from 'node:fs/promises'
 import { basename, isAbsolute, resolve } from 'node:path'
-import { AppError } from '@shared/errors'
+import { AppError, PROVIDER_BUSY_STOP_REASON } from '@shared/errors'
 import type {
   AppSettings,
   ApprovalDecision,
@@ -35,6 +35,7 @@ import type {
 import type { PowerAdapter } from '@main/infrastructure/platform/power-adapter'
 import { DurableScheduler } from './scheduler'
 import { VerificationEngine } from './verification-engine'
+import { ConversationBuffer } from './conversation-buffer'
 
 interface RuntimeAttempt {
   provider: AgentProvider
@@ -61,6 +62,10 @@ export class Orchestrator {
   private queueChain: Promise<void> = Promise.resolve()
   private inhibitorHandle: string | null = null
   private shuttingDown = false
+  private readonly conversations = new ConversationBuffer()
+  private readonly conversationListeners = new Set<(jobId: string) => void>()
+  private readonly changedConversations = new Set<string>()
+  private conversationTimer: NodeJS.Timeout | null = null
 
   constructor(
     private readonly store: OrchestrationStore,
@@ -87,15 +92,24 @@ export class Orchestrator {
 
   async shutdown(): Promise<void> {
     this.shuttingDown = true
+    if (this.conversationTimer) clearTimeout(this.conversationTimer)
+    this.conversationTimer = null
+    this.changedConversations.clear()
     await this.scheduler.stop()
     for (const [jobId] of this.runtimes) await this.finishRuntime(jobId)
     if (this.inhibitorHandle) await this.power.releaseInhibitor(this.inhibitorHandle)
     this.inhibitorHandle = null
+    this.conversations.clear()
   }
 
   subscribe(listener: StateListener): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
+  }
+
+  subscribeConversation(listener: (jobId: string) => void): () => void {
+    this.conversationListeners.add(listener)
+    return () => this.conversationListeners.delete(listener)
   }
 
   async createProject(name: string, inputPath: string): Promise<Project> {
@@ -133,7 +147,23 @@ export class Orchestrator {
   }
 
   getJobDetail(jobId: string) {
-    return this.store.getJobDetail(jobId)
+    return {
+      ...redact(this.store.getJobDetail(jobId)),
+      conversation: this.conversations.read(jobId)
+    }
+  }
+
+  async readJobConversation(jobId: string): Promise<CodexThreadDetail> {
+    const detail = this.store.getJobDetail(jobId)
+    const session = detail.sessions[0]
+    if (!session)
+      throw new AppError('VALIDATION', 'This job has no saved provider conversation yet.')
+    const provider = this.providerFactory(detail.job.provider, this.store.getSettings())
+    try {
+      return await provider.readThread(session.externalId)
+    } finally {
+      await provider.disconnect()
+    }
   }
 
   async jobAction(jobId: string, action: string): Promise<Job> {
@@ -198,6 +228,7 @@ export class Orchestrator {
         if (!['FAILED', 'VERIFICATION_FAILED', 'NEEDS_REVIEW'].includes(job.state)) {
           throw new AppError('INVALID_TRANSITION', 'Job is not in a retryable state.')
         }
+        this.cancelPendingSchedules(jobId)
         this.transition(jobId, 'QUEUED', 'Job queued for manual retry.')
         void this.processQueue()
         break
@@ -513,6 +544,10 @@ export class Orchestrator {
     const project = this.store.getProject(job.projectId)
     await this.validateProjectPath(project.path)
     const session = this.store.latestSession(jobId)
+    const previousAttempt = this.store.getLatestAttempt(jobId)
+    const rejectedBeforeTurn =
+      previousAttempt?.providerTurnId === null &&
+      previousAttempt.stopReason === PROVIDER_BUSY_STOP_REASON
     const kind = session ? 'resume' : this.store.getLatestAttempt(jobId) ? 'retry' : 'start'
     const attempt = this.store.createAttempt(jobId, kind)
     job = this.transition(
@@ -532,7 +567,8 @@ export class Orchestrator {
       const ref = session
         ? await provider.resume({
             objective: job.objective,
-            continuation: attempt.number === 1 ? job.objective : CONTINUATION_PROMPT,
+            continuation:
+              attempt.number === 1 || rejectedBeforeTurn ? job.objective : CONTINUATION_PROMPT,
             cwd: project.path,
             profile: job.profile,
             sessionId: session.externalId
@@ -613,6 +649,25 @@ export class Orchestrator {
           this.transition(jobId, 'RUNNING', 'Provider turn started.', attemptId)
         }
         break
+      case 'message.updated':
+        if (!runtime || !attemptId) return
+        this.conversations.update(jobId, attemptId, {
+          ...providerEvent,
+          turnId:
+            providerEvent.turnId || this.store.getLatestAttempt(jobId)?.providerTurnId || attemptId
+        })
+        this.changedConversations.add(jobId)
+        if (!this.conversationTimer && !this.shuttingDown) {
+          this.conversationTimer = setTimeout(() => {
+            this.conversationTimer = null
+            const changedJobs = [...this.changedConversations]
+            this.changedConversations.clear()
+            for (const changedJob of changedJobs) {
+              for (const listener of this.conversationListeners) listener(changedJob)
+            }
+          }, 250)
+        }
+        return
       case 'activity':
       case 'command.started':
         this.emit(
@@ -1109,12 +1164,30 @@ export class Orchestrator {
   ): Promise<void> {
     const appError =
       error instanceof AppError ? error : new AppError('PROVIDER_UNAVAILABLE', String(error))
-    this.store.updateAttempt(attemptId, { status: 'failed', stopReason: appError.message }, true)
+    this.store.updateAttempt(
+      attemptId,
+      {
+        status: 'failed',
+        stopReason: appError.code === 'PROVIDER_BUSY' ? PROVIDER_BUSY_STOP_REASON : appError.message
+      },
+      true
+    )
     const current = this.store.getJob(jobId)
     if (current.state === 'STARTING') {
+      if (appError.code === 'PROVIDER_BUSY') {
+        this.cancelPendingSchedules(jobId)
+        this.emit(
+          this.store.appendEvent(jobId, attemptId, 'provider.busy', 'warning', appError.message, {
+            code: 'PROVIDER_BUSY'
+          })
+        )
+        this.notify('Conversation needs review', appError.message)
+      }
       this.transition(
         jobId,
-        appError.code === 'AUTHENTICATION_REQUIRED' ? 'NEEDS_REVIEW' : 'FAILED',
+        ['AUTHENTICATION_REQUIRED', 'PROVIDER_BUSY'].includes(appError.code)
+          ? 'NEEDS_REVIEW'
+          : 'FAILED',
         appError.message,
         attemptId
       )
@@ -1126,6 +1199,7 @@ export class Orchestrator {
     const runtime = this.runtimes.get(jobId)
     if (!runtime) return
     this.runtimes.delete(jobId)
+    this.conversations.interrupt(jobId)
     runtime.unsubscribe()
     await runtime.provider.disconnect()
     await this.syncInhibitor()

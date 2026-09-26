@@ -126,6 +126,8 @@ Sensitive columns should be minimized. Schema must support migrations. Corruptio
 
 ## Logging
 
+Alpha.3 strips terminal controls before secret redaction and frames stderr by line so split escape sequences/credentials are assembled before projection. Legacy job event text is sanitized on read without database rewriting. Streaming transcripts stay in bounded memory, are redacted after assembly, and withhold the unfinished trailing token before transport. They never enter audit logs, SQLite, or diagnostics. The conversation UI uses Vue text escaping and does not execute HTML, scripts, or model-provided links. The job-conversation IPC accepts only a validated job id; main determines the provider/session. External writer conflicts fail closed to review and never authorize terminating another client or removing locks.
+
 Use structured logs with:
 
 - timestamp,

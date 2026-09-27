@@ -30,8 +30,8 @@ jobs:
       - name: Install Electron binary for tooling
         run: node node_modules/electron/install.js
 
-      - name: Build SQLite for Node test ABI
-        run: npm rebuild better-sqlite3
+      - name: Smoke-test bundled SQLite prebuild under Node
+        run: node -e "const Database=require('better-sqlite3'); const db=new Database(':memory:'); if(db.prepare('select 1 as ok').get().ok !== 1) process.exit(1); db.close()"
 
       - name: Validate OpenSpec
         run: npm run openspec:validate
@@ -43,7 +43,7 @@ jobs:
         run: npm run lint
 
       - name: Unit and integration tests
-        run: npm test
+        run: npm test -- --pool=threads
 
       - name: Rebuild native dependencies for Electron
         run: npm run postinstall

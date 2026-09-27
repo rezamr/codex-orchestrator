@@ -2,7 +2,7 @@
 
 Codex Orchestrator is an open-source, desktop-first control plane for durable, long-running Codex engineering work. It does not replace Codex: it manages the work around it—queues, sessions, interruptions, approvals, verification, recovery, and optional post-completion computer actions.
 
-> **Status: `0.1.0-alpha.3`.** This is an early alpha for developers and testers. Automated workflows and a read-only live Codex app-server check pass. A complete controlled real-Codex workflow and real sleep/hibernate/restart/shutdown actions have not been manually validated.
+> **Status: `0.1.0-alpha.4`.** This is an early alpha for developers and testers. Automated workflows and a read-only live Codex app-server check pass. A complete controlled real-Codex workflow and real sleep/hibernate/restart/shutdown actions have not been manually validated.
 
 Codex Orchestrator is an independent community project and is not an official OpenAI product. It is licensed under MIT; see [LICENSE](LICENSE).
 

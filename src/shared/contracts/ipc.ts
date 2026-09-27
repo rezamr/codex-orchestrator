@@ -28,6 +28,7 @@ export const IPC_CHANNELS = {
   jobsDetail: 'jobs:detail',
   jobsConversation: 'jobs:conversation',
   jobsAction: 'jobs:action',
+  jobsScheduleResume: 'jobs:schedule-resume',
   approvalsRespond: 'approvals:respond',
   powerCancel: 'power:cancel',
   settingsGet: 'settings:get',
@@ -57,6 +58,7 @@ export interface OrchestratorApi {
   getJobDetail(jobId: string): Promise<JobDetail>
   readJobConversation(jobId: string): Promise<CodexThreadDetail>
   jobAction(jobId: string, action: string): Promise<Job>
+  scheduleJobResume(jobId: string, resumeAt: string): Promise<Job>
   respondToApproval(
     approvalId: string,
     decision: ApprovalDecision,

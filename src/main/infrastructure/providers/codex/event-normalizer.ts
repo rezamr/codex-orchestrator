@@ -1,4 +1,4 @@
-import { classifyLimit } from '@main/domain/retry-policy'
+import { classifyLimit, isRateLimitReached } from '@main/domain/retry-policy'
 import { redactString } from '@main/infrastructure/logging/redaction'
 import type { ProviderEvent } from '../provider'
 
@@ -90,12 +90,12 @@ export function normalizeCodexNotification(
     ]
   }
   if (method === 'account/rateLimits/updated') {
-    const limit = params.rateLimits as Record<string, unknown> | undefined
-    if (!limit?.rateLimitReachedType) return []
+    const limit = params.rateLimits ?? params
+    if (!isRateLimitReached(limit)) return []
     return [
       {
         type: 'provider.rate_limited',
-        evidence: classifyLimit(limit, now, new Date(now.getTime() + 3_600_000))
+        evidence: classifyLimit(limit, now)
       }
     ]
   }
@@ -127,7 +127,7 @@ export function normalizeCodexNotification(
       return [
         {
           type: 'provider.rate_limited',
-          evidence: classifyLimit(error ?? message, now, new Date(now.getTime() + 3_600_000))
+          evidence: classifyLimit(error ?? message, now)
         }
       ]
     }

@@ -175,7 +175,7 @@ export class FakeProvider implements AgentProvider {
     this.sessions.set(ref.sessionId, ref)
     this.emit({ type: 'session.started', sessionId: ref.sessionId })
     this.emit({ type: 'turn.started', ...ref })
-    this.runScenario(request.objective.replace('[limit]', ''), ref)
+    this.runScenario(request.objective.replace(/\[limit(?:-unknown)?\]/, ''), ref)
     return ref
   }
 
@@ -230,6 +230,22 @@ export class FakeProvider implements AgentProvider {
             kind: needsInput ? 'user-input' : 'command',
             title: needsInput ? 'Clarification required' : 'Run project verification',
             detail: needsInput ? 'Provide the requested clarification.' : 'npm test'
+          }),
+        20
+      )
+      return
+    }
+    if (objective.includes('[limit-unknown]')) {
+      this.later(
+        () =>
+          this.emit({
+            type: 'provider.rate_limited',
+            evidence: {
+              retryAt: null,
+              source: 'unknown',
+              confidence: 'low',
+              redactedEvidence: 'Fake provider has no reliable reset time.'
+            }
           }),
         20
       )

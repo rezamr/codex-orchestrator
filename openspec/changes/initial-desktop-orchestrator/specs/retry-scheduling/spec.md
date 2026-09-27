@@ -35,11 +35,22 @@ The system SHALL represent provider usage/rate-limit waiting as a distinct state
 - **THEN** the scheduler uses that time according to policy
 - **AND** records that the time came from structured provider data
 
-#### Scenario: Exact reset time is unavailable
+#### Scenario: Exact usage reset time is unavailable
 
-- **WHEN** no reliable reset timestamp is available
-- **THEN** the system uses a bounded configured fallback policy
-- **AND** does not claim an exact reset time as fact
+- **WHEN** a Codex usage-limit condition is confirmed
+- **AND** no reliable provider reset timestamp can be obtained after supported rate-limit refresh or merge handling
+- **THEN** the system MUST NOT invent or automatically estimate a resume time
+- **AND** MUST NOT create an automatic resume schedule
+- **AND** SHALL keep the job safely waiting for the usage reset
+- **AND** SHALL ask the user to select a future local date and time
+- **AND** SHALL persist the resulting resume schedule with source `user`
+
+#### Scenario: Transient provider failure has no explicit retry time
+
+- **WHEN** a retryable transport, network, or temporary provider failure occurs
+- **AND** no explicit provider retry time is available
+- **THEN** the system MAY use its bounded configured retry/backoff policy
+- **AND** MUST keep this transient retry policy separate from usage-limit reset scheduling
 
 ### Requirement: Safe continuation
 

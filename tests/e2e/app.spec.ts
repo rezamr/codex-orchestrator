@@ -250,6 +250,43 @@ test('persists limit recovery across attempts and cancels simulated power safely
   ).toBe('cancelled')
 })
 
+test('asks for a manual date and time when Codex reset time is unknown', async () => {
+  const harness = await launch()
+  const projectId = await createProject(harness.page, harness.projectDirectory)
+  const jobId = await createJob(
+    harness.page,
+    jobInput(projectId, '[limit-unknown] wait for a user-selected reset time')
+  )
+
+  await expect
+    .poll(async () => (await detail(harness.page, jobId)).job.state)
+    .toBe('WAITING_FOR_LIMIT')
+  expect((await detail(harness.page, jobId)).job.nextActionAt).toBeNull()
+
+  await harness.page.getByRole('button', { name: 'Jobs', exact: true }).click()
+  await harness.page
+    .getByText('[limit-unknown] wait for a user-selected reset time', { exact: true })
+    .click()
+
+  await expect(harness.page.getByText('Manual resume time required', { exact: true })).toBeVisible()
+  await expect(
+    harness.page.getByText(/Codex did not provide a reliable reset time/)
+  ).toBeVisible()
+
+  await harness.page.getByLabel('Resume date and time').fill('2099-01-01T12:30')
+  await harness.page.getByRole('button', { name: 'Schedule resume', exact: true }).click()
+
+  await expect(harness.page.getByText('Resume scheduled', { exact: true })).toBeVisible()
+  await expect(harness.page.getByText(/User specified/)).toBeVisible()
+  await expect(harness.page.getByRole('button', { name: 'Resume now', exact: true })).toBeVisible()
+
+  const scheduled = (await detail(harness.page, jobId)).schedules.find(
+    (entry) => entry.kind === 'resume' && entry.status === 'pending'
+  )
+  expect(scheduled?.source).toBe('user')
+  expect(new Date(scheduled!.dueAt).getFullYear()).toBe(2099)
+})
+
 test('reopens the durable database after an application restart', async () => {
   const first = await launch()
   const projectId = await createProject(first.page, first.projectDirectory)

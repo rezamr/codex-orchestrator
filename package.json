@@ -12,7 +12,7 @@
   "type": "module",
   "main": "out/main/index.js",
   "engines": {
-    "node": "^22.13.0 || >=24"
+    "node": "^22.14.0 || >=24"
   },
   "scripts": {
     "openspec:init": "npx @fission-ai/openspec@latest init --tools codex",

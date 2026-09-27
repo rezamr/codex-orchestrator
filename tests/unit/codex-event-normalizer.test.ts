@@ -39,15 +39,44 @@ describe('Codex app-server event normalization', () => {
     ).toEqual([{ type: 'command.started', message: 'npm test' }])
   })
 
-  it('normalizes a structured usage limit', () => {
+  it('normalizes the documented nested Codex usage-limit window', () => {
     const events = normalizeCodexNotification(
       'account/rateLimits/updated',
-      { rateLimits: { rateLimitReachedType: 'primary', resetsAt: 1_800_000_000 } },
+      {
+        rateLimits: {
+          primary: {
+            usedPercent: 100,
+            windowDurationMins: 300,
+            resetsAt: 1_800_000_000
+          },
+          secondary: null,
+          rateLimitReachedType: 'rate_limit_reached'
+        }
+      },
       new Date('2026-01-01T00:00:00.000Z')
     )
     expect(events?.[0]?.type).toBe('provider.rate_limited')
     if (events?.[0]?.type === 'provider.rate_limited') {
       expect(events[0].evidence.source).toBe('provider-structured')
+      expect(events[0].evidence.retryAt).toBe('2027-01-15T08:00:00.000Z')
+    }
+  })
+
+  it('does not invent a reset time for a sparse reached notification', () => {
+    const events = normalizeCodexNotification(
+      'account/rateLimits/updated',
+      {
+        rateLimits: {
+          primary: { usedPercent: 100 },
+          rateLimitReachedType: 'rate_limit_reached'
+        }
+      },
+      new Date('2026-01-01T00:00:00.000Z')
+    )
+    expect(events?.[0]?.type).toBe('provider.rate_limited')
+    if (events?.[0]?.type === 'provider.rate_limited') {
+      expect(events[0].evidence.retryAt).toBeNull()
+      expect(events[0].evidence.source).toBe('unknown')
     }
   })
 })

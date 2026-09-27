@@ -761,6 +761,28 @@ tbody tr:hover {
 .detail-reason {
   margin-bottom: 13px;
 }
+.limit-resume-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 320px) auto;
+  align-items: end;
+  gap: 12px;
+  margin: 0 0 14px;
+  padding: 13px 14px;
+  border: 1px solid #eadfc9;
+  border-left: 3px solid var(--warning);
+  border-radius: 5px;
+  background: #fffdfa;
+}
+.limit-resume-panel p {
+  margin: 3px 0 0;
+  font-size: 12px;
+}
+.resume-time-field {
+  min-width: 0;
+}
+.limit-resume-panel .button {
+  min-height: 37px;
+}
 .toolbar {
   display: flex;
   align-items: center;

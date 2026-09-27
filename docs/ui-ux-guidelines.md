@@ -179,3 +179,17 @@ Implementation should create shared:
 - empty states.
 
 Do not style each screen independently.
+
+## Unknown usage-reset time
+
+When a job is waiting on a Codex usage limit and no reliable provider reset time is available, the UI must not display an invented countdown or fallback time.
+
+The job detail must:
+- state that the reset time is unknown,
+- request a future local date/time,
+- persist the user's selection,
+- label a user-selected schedule as such,
+- allow the time to be changed,
+- keep a deliberate **Resume now** action separate from scheduled resume.
+
+When Codex supplies the reset time, label it as provider-supplied rather than user-specified.

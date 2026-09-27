@@ -54,7 +54,7 @@
 - [x] 6.1 Implement persisted schedule repository and scheduler with fake-clock tests.
 - [x] 6.2 Implement bounded retry/backoff policy.
 - [x] 6.3 Implement usage/rate-limit classification with confidence/source tracking.
-- [x] 6.4 Prefer structured retry/reset metadata and add conservative fallback policy.
+- [x] 6.4 Prefer structured retry/reset metadata; refresh sparse Codex limit state and require user-selected timing when a usage reset remains unknown.
 - [x] 6.5 Implement automatic continuation using the same provider session where supported.
 - [x] 6.6 Prevent tight loops and enforce maximum automatic resume attempts.
 - [x] 6.7 Reconcile overdue schedules safely after application restart.

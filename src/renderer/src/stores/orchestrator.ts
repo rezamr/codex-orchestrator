@@ -100,6 +100,14 @@ export const useOrchestratorStore = defineStore('orchestrator', () => {
     await refresh()
   }
 
+  async function scheduleJobResume(jobId: string, resumeAt: string): Promise<void> {
+    await run(
+      () => window.orchestrator.scheduleJobResume(jobId, resumeAt),
+      'Resume time scheduled.'
+    )
+    await refresh()
+  }
+
   async function respondToApproval(
     approvalId: string,
     decision: ApprovalDecision,
@@ -227,6 +235,7 @@ export const useOrchestratorStore = defineStore('orchestrator', () => {
     removeProject,
     createJob,
     jobAction,
+    scheduleJobResume,
     respondToApproval,
     loadSettings,
     saveSettings,

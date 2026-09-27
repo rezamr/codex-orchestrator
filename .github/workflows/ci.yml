@@ -10,10 +10,10 @@ permissions:
   contents: read
 
 jobs:
-  windows:
-    name: Windows quality gates
-    runs-on: windows-latest
-    timeout-minutes: 30
+  node-quality:
+    name: Node quality gates
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,11 +21,16 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '22.13.0'
+          node-version: '22.14.0'
           cache: npm
 
-      - name: Install locked dependencies
-        run: npm ci
+      # Skip the application postinstall here. These checks run under Node, while
+      # the packaged desktop app gets an Electron-native rebuild in the Windows job.
+      - name: Install locked dependencies without Electron postinstall
+        run: npm ci --ignore-scripts
+
+      - name: Smoke-test SQLite under Node
+        run: node -e "const Database=require('better-sqlite3'); const db=new Database(':memory:'); if(db.prepare('select 1 as ok').get().ok !== 1) process.exit(1); db.close()"
 
       - name: Validate OpenSpec
         run: npm run openspec:validate
@@ -37,8 +42,33 @@ jobs:
         run: npm run lint
 
       - name: Unit and integration tests
-        run: npm test
+        run: npm test -- --pool=threads
 
+  windows-electron:
+    name: Windows Electron gates
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.0'
+          cache: npm
+
+      - name: Install locked dependencies without app postinstall
+        run: npm ci --ignore-scripts
+
+      - name: Install Electron binary
+        run: node node_modules/electron/install.js
+
+      - name: Rebuild native dependencies for Electron
+        run: npm run postinstall
+
+      # E2E launches the real Electron application with the deterministic fake
+      # provider/power adapters, so SQLite is exercised with the production runtime ABI.
       - name: Electron E2E tests
         run: npm run test:e2e
 

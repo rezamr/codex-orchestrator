@@ -97,6 +97,13 @@ export const lifecycleActionSchema = z.object({
   action: z.enum(['start', 'pause', 'resume', 'interrupt', 'cancel', 'retry', 'verify', 'archive'])
 })
 
+export const scheduleJobResumeSchema = z
+  .object({
+    jobId: idSchema,
+    resumeAt: z.string().datetime({ offset: true })
+  })
+  .strict()
+
 export const selectDirectorySchema = z.object({
   defaultPath: z.string().max(4_096).optional()
 })

@@ -13,6 +13,8 @@ const api: OrchestratorApi = {
   getJobDetail: (jobId) => ipcRenderer.invoke(IPC_CHANNELS.jobsDetail, jobId),
   readJobConversation: (jobId) => ipcRenderer.invoke(IPC_CHANNELS.jobsConversation, jobId),
   jobAction: (jobId, action) => ipcRenderer.invoke(IPC_CHANNELS.jobsAction, { jobId, action }),
+  scheduleJobResume: (jobId, resumeAt) =>
+    ipcRenderer.invoke(IPC_CHANNELS.jobsScheduleResume, { jobId, resumeAt }),
   respondToApproval: (approvalId, decision, input) =>
     ipcRenderer.invoke(IPC_CHANNELS.approvalsRespond, { approvalId, decision, input }),
   cancelPowerCountdown: (scheduleId) => ipcRenderer.invoke(IPC_CHANNELS.powerCancel, scheduleId),

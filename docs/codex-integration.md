@@ -129,24 +129,28 @@ The original objective remains immutable job metadata. Continuation text is not 
 
 ## Usage/rate-limit handling
 
-Do not assume every limit has a machine-readable reset timestamp.
+Do not assume every limit notification contains a complete reset timestamp. Codex account rate-limit notifications may be sparse.
 
-Classify evidence in descending confidence:
+When a usage limit is reached:
 
-1. structured provider retry/reset metadata,
-2. documented protocol error fields,
-3. conservative parsing of a human-readable provider message,
-4. user-configured retry time,
-5. bounded fallback retry schedule.
+1. inspect structured event data for the applicable blocking window;
+2. interpret current primary/secondary windows and `rateLimitsByLimitId` data;
+3. if the event is incomplete, obtain a fresh supported `account/rateLimits/read` snapshot through the connected provider;
+4. if one or more applicable blocking windows have reliable reset timestamps, schedule no earlier than the latest blocking reset;
+5. if no reliable reset timestamp exists after refresh, create **no automatic resume schedule** and ask the user to choose a future local date/time.
+
+The user-selected time is persisted as a resume schedule with source `user`. A deliberate **Resume now** action remains available and may hit the provider limit again if chosen too early.
+
+Bounded exponential/fixed fallback retry remains available for transient network, transport, or provider failures. It is not used as a substitute for an unknown quota reset time.
 
 Store:
 
 - detected category,
 - source,
-- raw redacted evidence,
-- computed retry time,
+- redacted evidence,
+- reliable reset time when present,
 - confidence,
-- retry count.
+- retry/attempt count.
 
 Never represent waiting as “bypassing” a provider limit.
 

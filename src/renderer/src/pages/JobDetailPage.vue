@@ -10,6 +10,7 @@ const detail = computed(() => store.selectedJob)
 const savedConversation = ref<CodexThreadDetail | null>(null)
 const conversationLoading = ref(false)
 const conversationError = ref<string | null>(null)
+const manualResumeAt = ref('')
 const busy = computed(() =>
   /active writer|owned by another active Codex client/i.test(detail.value?.job.stateReason ?? '')
 )
@@ -19,6 +20,21 @@ const audit = computed(
 const rawActivity = computed(
   () => detail.value?.events.filter((event) => event.type === 'activity') ?? []
 )
+const pendingResume = computed(
+  () =>
+    detail.value?.schedules.find(
+      (schedule) => schedule.kind === 'resume' && schedule.status === 'pending'
+    ) ?? null
+)
+const waitingForLimit = computed(() => detail.value?.job.state === 'WAITING_FOR_LIMIT')
+
+function toLocalDateTimeInput(iso: string | null): string {
+  if (!iso) return ''
+  const date = new Date(iso)
+  if (!Number.isFinite(date.getTime())) return ''
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+  return local.toISOString().slice(0, 16)
+}
 const savedMessages = computed(() => {
   const liveIds = new Set(detail.value?.conversation.messages.map((message) => message.id) ?? [])
   return (savedConversation.value?.turns ?? []).flatMap((turn) =>
@@ -62,11 +78,27 @@ watch(
   () => {
     savedConversation.value = null
     conversationError.value = null
+    manualResumeAt.value = toLocalDateTimeInput(detail.value?.job.nextActionAt ?? null)
     if (detail.value?.sessions.length && !detail.value.conversation.messages.length)
       void loadConversation()
   },
   { immediate: true }
 )
+
+watch(
+  () => detail.value?.job.nextActionAt,
+  (value) => {
+    manualResumeAt.value = toLocalDateTimeInput(value ?? null)
+  }
+)
+
+async function scheduleManualResume(): Promise<void> {
+  const jobId = detail.value?.job.id
+  if (!jobId || !manualResumeAt.value) return
+  const selected = new Date(manualResumeAt.value)
+  if (!Number.isFinite(selected.getTime())) return
+  await store.scheduleJobResume(jobId, selected.toISOString())
+}
 
 const actions = computed(() => {
   const state = detail.value?.job.state
@@ -86,8 +118,9 @@ const actions = computed(() => {
   )
     result.push(['pause', 'Pause', ''])
   if (['STARTING', 'RUNNING'].includes(state)) result.push(['interrupt', 'Interrupt', ''])
-  if (['PAUSED', 'WAITING_FOR_LIMIT', 'WAITING_FOR_RETRY'].includes(state))
-    result.push(['resume', 'Resume', 'primary'])
+  if (state === 'PAUSED') result.push(['resume', 'Resume', 'primary'])
+  if (['WAITING_FOR_LIMIT', 'WAITING_FOR_RETRY'].includes(state))
+    result.push(['resume', 'Resume now', 'primary'])
   if (
     ['VERIFICATION_FAILED', 'NEEDS_REVIEW'].includes(state) &&
     detail.value?.attempts[0]?.status === 'completed'
@@ -132,6 +165,30 @@ async function cancelCountdown(scheduleId: string): Promise<void> {
         Checks retain workspace protection until they finish or reach their configured timeout.
         Cancellation is unavailable while they run.
       </p>
+      <section v-if="waitingForLimit" class="limit-resume-panel" aria-label="Usage reset scheduling">
+        <div>
+          <strong>{{ pendingResume ? 'Resume scheduled' : 'Manual resume time required' }}</strong>
+          <p v-if="pendingResume">
+            {{ new Date(pendingResume.dueAt).toLocaleString() }}
+            · {{ pendingResume.source === 'user' ? 'User specified' : 'Codex reset time' }}
+          </p>
+          <p v-else>
+            Codex did not provide a reliable reset time. Choose a future local date and time.
+          </p>
+        </div>
+        <label class="resume-time-field">
+          <span>Resume date and time</span>
+          <input v-model="manualResumeAt" type="datetime-local" />
+        </label>
+        <button
+          class="button"
+          type="button"
+          :disabled="!manualResumeAt"
+          @click="scheduleManualResume"
+        >
+          {{ pendingResume ? 'Change resume time' : 'Schedule resume' }}
+        </button>
+      </section>
       <div class="toolbar">
         <button
           v-if="detail.job.provider === 'codex' && detail.sessions[0]"

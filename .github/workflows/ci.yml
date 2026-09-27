@@ -36,8 +36,14 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Rebuild SQLite for Node test ABI
+        run: npm rebuild better-sqlite3
+
       - name: Unit and integration tests
         run: npm test
+
+      - name: Rebuild native dependencies for Electron
+        run: npm run postinstall
 
       - name: Electron E2E tests
         run: npm run test:e2e

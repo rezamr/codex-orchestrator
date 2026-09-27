@@ -741,6 +741,39 @@ tbody tr:hover {
 .detail-header {
   margin-bottom: 20px;
 }
+.job-progress-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0 0 18px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--border);
+  box-shadow: var(--shadow);
+}
+.job-progress-strip > div {
+  min-width: 0;
+  padding: 12px 14px;
+  background: var(--surface);
+}
+.job-progress-strip span,
+.conversation-disclosure summary span {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.job-progress-strip strong {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .back-button {
   margin: 0 0 13px;
   padding: 0;
@@ -1156,6 +1189,9 @@ tbody tr:hover {
   .detail-layout {
     grid-template-columns: 1fr;
   }
+  .job-progress-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .detail-layout aside {
     position: static;
     display: grid;
@@ -1178,19 +1214,50 @@ tbody tr:hover {
   }
 }
 
+.conversation-disclosure {
+  padding: 0;
+}
+.conversation-disclosure > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  cursor: pointer;
+  list-style: none;
+}
+.conversation-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.conversation-disclosure > summary strong {
+  display: block;
+  font-size: 13px;
+}
+.conversation-disclosure > summary div > span {
+  margin-top: 3px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.conversation-body {
+  padding: 0 16px 16px;
+  border-top: 1px solid var(--border);
+}
 .conversation-panel .section-heading {
   flex-wrap: wrap;
   gap: 12px;
+  padding-top: 14px;
 }
 .conversation-message {
   padding: 16px 0;
   border-top: 1px solid var(--border);
 }
 .conversation-text {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  line-height: 1.65;
+  max-height: 320px;
+  overflow: auto;
   margin-top: 10px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 .raw-provider-activity summary {
   cursor: pointer;

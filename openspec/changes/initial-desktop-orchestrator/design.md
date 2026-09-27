@@ -73,7 +73,11 @@ Schedules are persisted. In-memory timers are derived from due schedules. On sta
 
 ### Usage-limit recovery
 
-Prefer structured retry/reset metadata when available. Otherwise classify documented error data, then conservative parsed evidence, then user/fallback bounded policy. Never claim to bypass a provider limit.
+Prefer structured retry/reset metadata from the actual blocking Codex rate-limit window. Account rate-limit notifications may be sparse, so before declaring a reset time unknown the provider refreshes or merges the supported `account/rateLimits/read` state. Primary/secondary windows and `rateLimitsByLimitId` entries are interpreted according to the current app-server contract; if multiple windows are simultaneously blocking, resume no earlier than the latest applicable reset.
+
+A confirmed usage/quota limit with no reliable reset timestamp MUST NOT use exponential/fixed fallback scheduling. The job remains `WAITING_FOR_LIMIT` with no `nextActionAt` and the UI requests a future local date/time from the user. That user-selected time becomes a persisted `resume` schedule with source `user`. Manual "Resume now" remains available and cancels any pending resume schedule.
+
+Bounded fallback/backoff remains valid for transient network, transport, or temporary provider failures. Usage-limit waits and transient retries are separate policies. Never claim to bypass a provider limit.
 
 ### Verification
 

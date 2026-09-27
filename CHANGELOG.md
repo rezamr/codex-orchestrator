@@ -4,6 +4,8 @@ All notable user-facing changes are recorded here. The project follows Semantic 
 
 ## [Unreleased]
 
+## [0.1.0-alpha.4] - 2026-09-27
+
 ### Fixed
 
 - Read Codex usage-reset timestamps from the actual nested primary/secondary rate-limit windows and refresh sparse rate-limit notifications with `account/rateLimits/read` before deciding the reset time is unknown.

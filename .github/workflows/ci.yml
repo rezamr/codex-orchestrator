@@ -12,7 +12,7 @@ permissions:
 jobs:
   windows:
     name: Windows quality gates
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 30
     steps:
       - name: Checkout
@@ -24,15 +24,12 @@ jobs:
           node-version: '22.13.0'
           cache: npm
 
-      # package.json postinstall rebuilds native dependencies for Electron. Node/Vitest
-      # needs a Node ABI build first, so suppress postinstall during npm ci.
+      # Keep Node/Vitest on the bundled Node-compatible SQLite prebuild. package.json
+      # postinstall is reserved for the later Electron-native rebuild phase.
       - name: Install locked dependencies without Electron postinstall
         run: npm ci --ignore-scripts
 
-      - name: Rebuild SQLite for Node tests
-        run: npm rebuild better-sqlite3
-
-      - name: Smoke-test SQLite under Node
+      - name: Smoke-test bundled SQLite under Node
         run: node -e "const Database=require('better-sqlite3'); const db=new Database(':memory:'); if(db.prepare('select 1 as ok').get().ok !== 1) process.exit(1); db.close()"
 
       - name: Validate OpenSpec

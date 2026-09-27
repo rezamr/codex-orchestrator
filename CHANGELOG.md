@@ -13,6 +13,7 @@ All notable user-facing changes are recorded here. The project follows Semantic 
 ### Changed
 
 - Job detail now shows provider-supplied versus user-specified resume timing and lets the user schedule/change a manual resume date/time without exposing a generic scheduler API.
+- Raise the minimum supported Node 22 patch level to 22.14.0 because better-sqlite3 13.x can crash when opening a database on older Node 22 patch releases.
 
 ## [0.1.0-alpha.3] - 2026-09-26
 

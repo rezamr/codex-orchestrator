@@ -348,7 +348,7 @@ export interface CreateProjectInput {
 
 export interface LimitEvidence {
   retryAt: string | null
-  source: Schedule['source']
+  source: 'provider-structured' | 'provider-parsed' | 'unknown'
   confidence: Schedule['confidence']
   redactedEvidence: string
 }

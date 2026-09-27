@@ -2,6 +2,18 @@
 
 All notable user-facing changes are recorded here. The project follows Semantic Versioning after its first stable release.
 
+## [Unreleased]
+
+### Fixed
+
+- Read Codex usage-reset timestamps from the actual nested primary/secondary rate-limit windows and refresh sparse rate-limit notifications with `account/rateLimits/read` before deciding the reset time is unknown.
+- Stop creating guessed one-hour/exponential fallback schedules for unknown usage-limit resets. Jobs now remain safely in **Waiting for usage reset** with no next action until the user chooses a future local date/time or deliberately selects **Resume now**.
+- Keep bounded fallback/backoff only for transient network/transport/provider failures; user-selected limit schedules are persisted with source `user` and survive restart.
+
+### Changed
+
+- Job detail now shows provider-supplied versus user-specified resume timing and lets the user schedule/change a manual resume date/time without exposing a generic scheduler API.
+
 ## [0.1.0-alpha.3] - 2026-09-26
 
 ### Fixed

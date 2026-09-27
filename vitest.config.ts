@@ -12,10 +12,6 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts'],
-    // better-sqlite3 is a native addon. Running several isolated Vitest child
-    // processes concurrently can crash the Windows runner before assertions run.
-    // Serialize files on Windows while retaining normal parallelism elsewhere.
-    fileParallelism: process.platform !== 'win32',
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],

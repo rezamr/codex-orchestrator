@@ -384,6 +384,55 @@ describe('orchestrator fake-provider workflows', () => {
     expect(new Set(detail.sessions.map((session) => session.externalId)).size).toBe(1)
   })
 
+  it('refreshes sparse Codex limit data before deciding reset time is unknown', async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), 'codex-orchestrator-limit-refresh-'))
+    directories.push(projectPath)
+    const store = new OrchestrationStore(':memory:')
+
+    class RefreshingLimitProvider extends FakeProvider {
+      override async readAccountSnapshot() {
+        const snapshot = await super.readAccountSnapshot()
+        return {
+          ...snapshot,
+          rateLimits: [
+            {
+              id: 'refreshed-limit',
+              name: 'Refreshed Codex window',
+              primary: {
+                usedPercent: 100,
+                windowDurationMins: 300,
+                resetsAt: Math.floor((Date.now() + 150) / 1_000) + 1
+              },
+              secondary: null,
+              reachedType: 'primary'
+            }
+          ]
+        }
+      }
+    }
+
+    const orchestrator = new Orchestrator(
+      store,
+      new FakePowerAdapter(),
+      new StructuredLogger(),
+      () => undefined,
+      () => new RefreshingLimitProvider()
+    )
+    instances.push({ orchestrator, store })
+    await orchestrator.initialize()
+    const project = await orchestrator.createProject('Limit refresh', projectPath)
+    const job = await orchestrator.createJob(jobInput(project.id, '[limit-unknown] refresh first'))
+
+    await waitForState(store, job.id, 'WAITING_FOR_LIMIT')
+    const schedule = store
+      .listPendingSchedules()
+      .find((entry) => entry.jobId === job.id && entry.kind === 'resume')
+    expect(schedule?.source).toBe('provider-structured')
+    expect(schedule?.confidence).toBe('high')
+    expect(store.getJob(job.id).nextActionAt).toBe(schedule?.dueAt ?? null)
+    await waitForState(store, job.id, 'COMPLETED', 4_000)
+  })
+
   it('requires manual scheduling when a usage reset time is unknown', async () => {
     const { orchestrator, store, project } = await setup()
     const job = await orchestrator.createJob({

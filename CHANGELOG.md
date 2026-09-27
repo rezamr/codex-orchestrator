@@ -6,6 +6,12 @@ All notable user-facing changes are recorded here. The project follows Semantic 
 
 ## [0.1.0-alpha.4] - 2026-09-27
 
+### UI
+
+- Redesign Job detail as a status-first control surface: current stage, latest meaningful update, next action, and verification state are visible near the top.
+- Collapse full Codex conversation output by default and load saved history only on demand; older activity is collapsed and long response text scrolls inside its own bounded area.
+- Label manual usage-reset scheduling explicitly as local time while persisting an absolute timestamp internally.
+
 ### Fixed
 
 - Read Codex usage-reset timestamps from the actual nested primary/secondary rate-limit windows and refresh sparse rate-limit notifications with `account/rateLimits/read` before deciding the reset time is unknown.

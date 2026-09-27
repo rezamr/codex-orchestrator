@@ -216,7 +216,7 @@ async function cancelCountdown(scheduleId: string): Promise<void> {
           </p>
         </div>
         <label class="resume-time-field">
-          <span>Resume date and time</span>
+          <span>Resume date and time — local time</span>
           <input v-model="manualResumeAt" type="datetime-local" />
         </label>
         <button

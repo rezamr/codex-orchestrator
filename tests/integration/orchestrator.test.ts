@@ -384,6 +384,50 @@ describe('orchestrator fake-provider workflows', () => {
     expect(new Set(detail.sessions.map((session) => session.externalId)).size).toBe(1)
   })
 
+  it('requires manual scheduling when a usage reset time is unknown', async () => {
+    const { orchestrator, store, project } = await setup()
+    const job = await orchestrator.createJob({
+      ...jobInput(project.id, '[limit-unknown] choose a manual resume time'),
+      retryPolicy: { maxAutomaticAttempts: 0, baseDelaySeconds: 5, maxDelaySeconds: 10 }
+    })
+
+    await waitForState(store, job.id, 'WAITING_FOR_LIMIT')
+    expect(store.getJob(job.id).nextActionAt).toBeNull()
+    expect(
+      store
+        .listPendingSchedules()
+        .filter((schedule) => schedule.jobId === job.id && schedule.kind === 'resume')
+    ).toHaveLength(0)
+
+    const dueAt = new Date(Date.now() + 150).toISOString()
+    orchestrator.scheduleManualResume(job.id, dueAt)
+
+    const scheduled = store
+      .listPendingSchedules()
+      .find((schedule) => schedule.jobId === job.id && schedule.kind === 'resume')
+    expect(scheduled?.source).toBe('user')
+    expect(scheduled?.dueAt).toBe(dueAt)
+    expect(store.getJob(job.id).nextActionAt).toBe(dueAt)
+
+    await waitForState(store, job.id, 'COMPLETED', 3_000)
+    const detail = store.getJobDetail(job.id)
+    expect(detail.attempts).toHaveLength(2)
+    expect(detail.job.automaticAttempts).toBe(0)
+  })
+
+  it('rejects invalid manual resume times outside the usage-limit wait state', async () => {
+    const { orchestrator, project } = await setup()
+    const job = await orchestrator.createJob({
+      ...jobInput(project.id, 'Remain in a normal job'),
+      startImmediately: false
+    })
+    await expect(
+      Promise.resolve().then(() =>
+        orchestrator.scheduleManualResume(job.id, new Date(Date.now() + 60_000).toISOString())
+      )
+    ).rejects.toThrow('only be set while waiting for a usage reset')
+  })
+
   it('reconciles an ambiguous running job to needs-review after restart', async () => {
     const { orchestrator, store, project } = await setup()
     const job = store.createJob({

@@ -19,7 +19,7 @@ import type {
   ProviderStatus,
   Schedule
 } from '@shared/types/domain'
-import { computeRetryAt } from '@main/domain/retry-policy'
+import { classifyLimit, computeRetryAt } from '@main/domain/retry-policy'
 import { evaluatePowerEligibility } from '@main/domain/power-policy'
 import { isProtectedState, isTerminalState, resumableState } from '@main/domain/state-machine'
 import type { OrchestrationStore } from '@main/infrastructure/database/store'
@@ -242,6 +242,39 @@ export class Orchestrator {
       default:
         throw new AppError('VALIDATION', 'Unknown job action.')
     }
+    return this.store.getJob(jobId)
+  }
+
+  scheduleManualResume(jobId: string, resumeAt: string): Job {
+    const job = this.store.getJob(jobId)
+    if (job.state !== 'WAITING_FOR_LIMIT') {
+      throw new AppError(
+        'INVALID_TRANSITION',
+        'A manual resume time can only be set while waiting for a usage reset.'
+      )
+    }
+
+    const parsed = new Date(resumeAt)
+    if (!Number.isFinite(parsed.getTime()) || parsed.getTime() <= Date.now()) {
+      throw new AppError('VALIDATION', 'Resume time must be a valid future date and time.')
+    }
+
+    this.cancelPendingSchedules(jobId)
+    const dueAt = parsed.toISOString()
+    const schedule = this.store.createSchedule(jobId, 'resume', dueAt, 'user', 'high', {
+      reason: 'User selected the resume time because no reliable provider reset time was available.'
+    })
+    const event = this.store.appendEvent(
+      jobId,
+      null,
+      'resume.scheduled_manual',
+      'info',
+      `Resume scheduled by the user for ${dueAt}.`,
+      { scheduleId: schedule.id, dueAt, source: 'user' }
+    )
+    this.scheduler.changed()
+    this.emit(event)
+    this.notify('Resume scheduled', `Job will resume at ${parsed.toLocaleString()}.`)
     return this.store.getJob(jobId)
   }
 
@@ -789,6 +822,40 @@ export class Orchestrator {
         { status: 'stopped', stopReason: 'Usage limit wait.' },
         true
       )
+
+    let evidence = event.evidence
+    const runtime = this.runtimes.get(jobId)
+
+    // Rate-limit notifications may be sparse. Before declaring the reset time unknown,
+    // refresh the authoritative account/rateLimits snapshot through the connected provider.
+    if (!evidence.retryAt && runtime) {
+      try {
+        const snapshot = await runtime.provider.readAccountSnapshot()
+        const refreshed = classifyLimit(snapshot.rateLimits, new Date())
+        if (refreshed.retryAt) evidence = refreshed
+      } catch (error) {
+        this.emit(
+          this.store.appendEvent(
+            jobId,
+            attemptId,
+            'provider.rate_limit_refresh_failed',
+            'warning',
+            'Could not refresh Codex rate-limit details; manual resume scheduling may be required.',
+            { error: String(error) }
+          )
+        )
+      }
+    }
+
+    if (!evidence.retryAt || evidence.source === 'unknown') {
+      const reason =
+        'Codex usage limit was reached, but no reliable reset time was available. Choose a future date and time to resume.'
+      this.transition(jobId, 'WAITING_FOR_LIMIT', reason, attemptId, null)
+      this.notify('Resume time required', 'Choose when this job should resume.')
+      await this.finishRuntime(jobId)
+      return
+    }
+
     if (job.automaticAttempts >= job.retryPolicy.maxAutomaticAttempts) {
       this.transition(
         jobId,
@@ -799,18 +866,14 @@ export class Orchestrator {
       await this.finishRuntime(jobId)
       return
     }
-    const dueAt =
-      event.evidence.retryAt ??
-      computeRetryAt(job.automaticAttempts + 1, job.retryPolicy, new Date()).toISOString()
-    this.store.createSchedule(
-      jobId,
-      'resume',
-      dueAt,
-      event.evidence.source,
-      event.evidence.confidence,
-      { evidence: event.evidence.redactedEvidence }
-    )
-    this.transition(jobId, 'WAITING_FOR_LIMIT', event.evidence.redactedEvidence, attemptId, dueAt)
+
+    const dueAt = evidence.retryAt
+    const source =
+      evidence.source === 'provider-structured' ? 'provider-structured' : 'provider-parsed'
+    this.store.createSchedule(jobId, 'resume', dueAt, source, evidence.confidence, {
+      evidence: evidence.redactedEvidence
+    })
+    this.transition(jobId, 'WAITING_FOR_LIMIT', evidence.redactedEvidence, attemptId, dueAt)
     this.notify(
       'Job waiting for usage reset',
       `Scheduled to resume at ${new Date(dueAt).toLocaleString()}.`
@@ -973,7 +1036,8 @@ export class Orchestrator {
       )
       return
     }
-    if (job.automaticAttempts >= job.retryPolicy.maxAutomaticAttempts) {
+    const userScheduled = schedule.source === 'user'
+    if (!userScheduled && job.automaticAttempts >= job.retryPolicy.maxAutomaticAttempts) {
       this.store.resolveSchedule(schedule.id, 'failed')
       this.transition(
         job.id,
@@ -983,7 +1047,7 @@ export class Orchestrator {
       return
     }
     this.store.resolveSchedule(schedule.id, 'completed')
-    this.store.incrementAutomaticAttempts(job.id)
+    if (!userScheduled) this.store.incrementAutomaticAttempts(job.id)
     await this.startJob(job.id)
   }
 

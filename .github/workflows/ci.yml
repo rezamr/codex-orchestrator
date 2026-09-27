@@ -10,10 +10,10 @@ permissions:
   contents: read
 
 jobs:
-  windows:
-    name: Windows quality gates
-    runs-on: windows-2022
-    timeout-minutes: 30
+  node-quality:
+    name: Node quality gates
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,16 +24,10 @@ jobs:
           node-version: '22.13.0'
           cache: npm
 
-      # Suppress package postinstall so the Node test phase can build better-sqlite3
-      # explicitly for the Node ABI. Electron gets its own rebuild after Node tests.
+      # Skip the application postinstall here. These checks run under Node, while
+      # the packaged desktop app gets an Electron-native rebuild in the Windows job.
       - name: Install locked dependencies without Electron postinstall
         run: npm ci --ignore-scripts
-
-      - name: Prepare native build tooling
-        run: python -m pip install setuptools
-
-      - name: Build SQLite native module for Node
-        run: node node_modules/node-gyp/bin/node-gyp.js rebuild --release --force_build=1 --directory node_modules/better-sqlite3
 
       - name: Smoke-test SQLite under Node
         run: node -e "const Database=require('better-sqlite3'); const db=new Database(':memory:'); if(db.prepare('select 1 as ok').get().ok !== 1) process.exit(1); db.close()"
@@ -50,14 +44,31 @@ jobs:
       - name: Unit and integration tests
         run: npm test -- --pool=threads
 
-      # Electron tooling and the packaged app need the native dependency rebuilt
-      # against Electron after the Node/Vitest test phase has finished.
-      - name: Install Electron binary for tooling
+  windows-electron:
+    name: Windows Electron gates
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: npm
+
+      - name: Install locked dependencies without app postinstall
+        run: npm ci --ignore-scripts
+
+      - name: Install Electron binary
         run: node node_modules/electron/install.js
 
       - name: Rebuild native dependencies for Electron
         run: npm run postinstall
 
+      # E2E launches the real Electron application with the deterministic fake
+      # provider/power adapters, so SQLite is exercised with the production runtime ABI.
       - name: Electron E2E tests
         run: npm run test:e2e
 

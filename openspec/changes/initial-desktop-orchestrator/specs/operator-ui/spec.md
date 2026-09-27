@@ -137,3 +137,25 @@ The Automations view SHALL identify its persisted Orchestrator schedules as such
 - **WHEN** the user opens Automations
 - **THEN** the view explains that there is no Orchestrator-owned schedule
 - **AND** it does not claim that Codex has no scheduled tasks
+
+### Requirement: Job detail is status-first
+The system SHALL prioritize operational job status over full conversation text on the Job detail screen.
+
+#### Scenario: User checks current progress
+- **WHEN** a user opens a managed job
+- **THEN** the current stage, latest meaningful update, next action, and verification state are visible near the top of the page
+- **AND** the user does not need to scroll through the Codex conversation to determine what the job is doing
+
+#### Scenario: User does not need transcript content
+- **WHEN** the Job detail screen is opened
+- **THEN** full conversation history is collapsed by default
+- **AND** saved conversation history is not loaded until the user explicitly opens or requests it
+- **AND** older activity is available through progressive disclosure rather than expanding the primary page indefinitely
+
+### Requirement: Manual resume uses local time
+The system SHALL interpret user-entered manual resume date/time values using the local system timezone and SHALL persist the resulting absolute timestamp.
+
+#### Scenario: User schedules a manual resume
+- **WHEN** the user enters a future date and time in the manual resume control
+- **THEN** the interface identifies the value as local time
+- **AND** the stored schedule represents the same absolute instant independent of display timezone

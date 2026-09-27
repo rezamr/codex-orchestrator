@@ -21,7 +21,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '22.13.0'
+          node-version: '22.14.0'
           cache: npm
 
       # Skip the application postinstall here. These checks run under Node, while
@@ -55,7 +55,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '22.13.0'
+          node-version: '22.14.0'
           cache: npm
 
       - name: Install locked dependencies without app postinstall

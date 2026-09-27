@@ -273,7 +273,16 @@ test('asks for a manual date and time when Codex reset time is unknown', async (
     harness.page.getByText(/Codex did not provide a reliable reset time/)
   ).toBeVisible()
 
-  await harness.page.getByLabel('Resume date and time').fill('2099-01-01T12:30')
+  await expect(harness.page.getByText('Current stage', { exact: true })).toBeVisible()
+  await expect(harness.page.getByText('Next', { exact: true })).toBeVisible()
+  const conversation = harness.page.locator('.conversation-disclosure')
+  await expect(conversation).not.toHaveAttribute('open', '')
+  await conversation.locator('summary').click()
+  await expect(conversation).toHaveAttribute('open', '')
+  await conversation.locator('summary').click()
+  await expect(conversation).not.toHaveAttribute('open', '')
+
+  await harness.page.getByLabel('Resume date and time — local time').fill('2099-01-01T12:30')
   await harness.page.getByRole('button', { name: 'Schedule resume', exact: true }).click()
 
   await expect(harness.page.getByText('Resume scheduled', { exact: true })).toBeVisible()

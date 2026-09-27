@@ -264,8 +264,8 @@ async function cancelCountdown(scheduleId: string): Promise<void> {
         <strong>{{ nextStepText() }}</strong>
       </div>
       <div>
-        <span>Attempts</span>
-        <strong>{{ detail.attempts.length }}</strong>
+        <span>Verification</span>
+        <strong>{{ latestVerification?.status ?? 'Not started' }}</strong>
       </div>
     </section>
 

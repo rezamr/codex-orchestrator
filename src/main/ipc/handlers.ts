@@ -15,6 +15,7 @@ import {
   idSchema,
   lifecycleActionSchema,
   openExternalSchema,
+  scheduleJobResumeSchema,
   selectDirectorySchema,
   updateSettingsSchema
 } from '@shared/schemas/ipc'
@@ -79,6 +80,10 @@ export function registerIpcHandlers(orchestrator: Orchestrator): () => void {
   handle(IPC_CHANNELS.jobsAction, (_event, input: unknown) => {
     const parsed = lifecycleActionSchema.parse(input)
     return orchestrator.jobAction(parsed.jobId, parsed.action)
+  })
+  handle(IPC_CHANNELS.jobsScheduleResume, (_event, input: unknown) => {
+    const parsed = scheduleJobResumeSchema.parse(input)
+    return orchestrator.scheduleManualResume(parsed.jobId, parsed.resumeAt)
   })
   handle(IPC_CHANNELS.approvalsRespond, (_event, input: unknown) => {
     const parsed = approvalResponseSchema.parse(input)

@@ -68,33 +68,29 @@ function collectBucketWindows(
   const secondaryOnly = lowerReached.includes('secondary')
   const genericReached = Boolean(reached) && !primaryOnly && !secondaryOnly
 
-  const windows: BlockingWindow[] = []
-  const primary = windowCandidate(
-    bucket.primary,
-    `${label}:primary`,
-    now,
-    primaryOnly || genericReached
-  )
-  const secondary = windowCandidate(
-    bucket.secondary,
-    `${label}:secondary`,
-    now,
-    secondaryOnly || genericReached
-  )
-
-  if (primary && (!secondaryOnly || genericReached)) windows.push(primary)
-  if (secondary && (!primaryOnly || genericReached)) windows.push(secondary)
-
-  // If no reached-type marker is present, only windows already at/over 100% qualify.
-  if (!reached) {
-    const strictPrimary = windowCandidate(bucket.primary, `${label}:primary`, now, false)
-    const strictSecondary = windowCandidate(bucket.secondary, `${label}:secondary`, now, false)
-    return [strictPrimary, strictSecondary].filter(
-      (entry): entry is BlockingWindow => entry !== null
-    )
+  if (primaryOnly) {
+    const primary = windowCandidate(bucket.primary, `${label}:primary`, now, true)
+    return primary ? [primary] : []
   }
 
-  return windows
+  if (secondaryOnly) {
+    const secondary = windowCandidate(bucket.secondary, `${label}:secondary`, now, true)
+    return secondary ? [secondary] : []
+  }
+
+  const strictPrimary = windowCandidate(bucket.primary, `${label}:primary`, now, false)
+  const strictSecondary = windowCandidate(bucket.secondary, `${label}:secondary`, now, false)
+  const strict = [strictPrimary, strictSecondary].filter(
+    (entry): entry is BlockingWindow => entry !== null
+  )
+
+  if (strict.length || !genericReached) return strict
+
+  // A generic reached marker with sparse usage data does not identify a single window.
+  // In that case, include all future windows so we never resume before a possible blocker clears.
+  const primary = windowCandidate(bucket.primary, `${label}:primary`, now, true)
+  const secondary = windowCandidate(bucket.secondary, `${label}:secondary`, now, true)
+  return [primary, secondary].filter((entry): entry is BlockingWindow => entry !== null)
 }
 
 function collectStructuredWindows(value: unknown, now: Date): BlockingWindow[] {

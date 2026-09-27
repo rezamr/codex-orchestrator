@@ -160,7 +160,7 @@ export class FakeProvider implements AgentProvider {
     this.sessions.set(ref.sessionId, ref)
     this.emit({ type: 'session.started', sessionId: ref.sessionId })
     this.emit({ type: 'turn.started', ...ref })
-    this.runScenario(request.objective, ref)
+    this.runScenario(request.objective, ref, request)
     return ref
   }
 
@@ -175,7 +175,13 @@ export class FakeProvider implements AgentProvider {
     this.sessions.set(ref.sessionId, ref)
     this.emit({ type: 'session.started', sessionId: ref.sessionId })
     this.emit({ type: 'turn.started', ...ref })
-    this.runScenario(request.objective.replace(/\[limit(?:-unknown)?\]/, ''), ref)
+    this.runScenario(
+      request.outputSchema
+        ? request.continuation
+        : request.objective.replace(/\[limit(?:-unknown)?\]/, ''),
+      ref,
+      request
+    )
     return ref
   }
 
@@ -208,7 +214,105 @@ export class FakeProvider implements AgentProvider {
     return () => this.listeners.delete(listener)
   }
 
-  private runScenario(objective: string, ref: ProviderSessionRef): void {
+  private runScenario(
+    objective: string,
+    ref: ProviderSessionRef,
+    request: ProviderStartRequest
+  ): void {
+    const schemaId = request.outputSchema?.$id
+    if (schemaId === 'codex-orchestrator-controller-decision-v1') {
+      const resumedWithChild = objective.includes('CHILD_RESULT=')
+      const development = objective.includes('[dev-')
+      const sensitive = objective.includes('[dev-auth]')
+      const highComplexity = objective.includes('[dev-high]')
+      const decision = resumedWithChild
+        ? { action: 'complete', summary: 'The delegated result is ready for final verification.' }
+        : objective.includes('[delegate]')
+          ? {
+              action: 'delegate',
+              summary: 'Dispatch one bounded fake child.',
+              child: {
+                profile: development ? 'LUNA_DEV' : 'LUNA_QA',
+                taskClass: development ? 'development' : 'runtime_qa',
+                complexity: highComplexity ? 'high' : 'low',
+                bounded: true,
+                rootCauseProven: true,
+                expectedFiles: development ? 2 : 0,
+                multiModule: false,
+                risk: {
+                  authentication: sensitive ? 'yes' : 'no',
+                  workspaceScope: 'no',
+                  query: 'no',
+                  security: 'no',
+                  database: 'no',
+                  deployment: 'no',
+                  architecture: 'no'
+                },
+                instruction: objective.includes('[child-blocked]')
+                  ? '[blocked] Report the controlled blocker.'
+                  : objective.includes('[child-fail]')
+                    ? '[fatal] Fail with a terminal provider event.'
+                    : objective.includes('[child-limit]')
+                      ? '[child-limit] Wait for a deterministic provider limit.'
+                      : objective.includes('[child-malformed]')
+                        ? '[child-malformed] Return invalid structured output.'
+                        : objective.includes('[child-delay]')
+                          ? '[child-delay] Complete after a deterministic delay.'
+                          : 'Complete the delegated task.'
+              }
+            }
+          : { action: 'complete', summary: 'No delegation is required.' }
+      this.later(() => this.completeWithMessage(ref, JSON.stringify(decision)), 30)
+      return
+    }
+    if (schemaId === 'codex-orchestrator-child-result-v1') {
+      if (objective.includes('[child-limit]')) {
+        this.later(
+          () =>
+            this.emit({
+              type: 'provider.rate_limited',
+              evidence: {
+                retryAt: new Date(Date.now() + 150).toISOString(),
+                source: 'provider-structured',
+                confidence: 'high',
+                redactedEvidence: 'Deterministic child limit.'
+              }
+            }),
+          30
+        )
+        return
+      }
+      if (objective.includes('[child-malformed]')) {
+        this.later(() => this.completeWithMessage(ref, '{"unexpected":true}'), 30)
+        return
+      }
+      if (objective.includes('[fatal]')) {
+        this.later(
+          () =>
+            this.emit({
+              type: 'turn.failed',
+              message: 'Deterministic terminal child failure.',
+              retryable: false
+            }),
+          30
+        )
+        return
+      }
+      const blocked = objective.includes('[blocked]')
+      const result = {
+        status: blocked ? 'blocked' : 'completed',
+        summary: blocked
+          ? 'The fake child encountered a controlled blocker.'
+          : 'The fake child completed.',
+        evidence: blocked ? [] : ['Deterministic fake-provider evidence.'],
+        nextAction: blocked ? 'Review the controlled blocker.' : null
+      }
+      this.later(
+        () => this.completeWithMessage(ref, JSON.stringify(result)),
+        objective.includes('[child-delay]') ? 800 : 30
+      )
+      return
+    }
     if (objective.includes('[legacy]')) {
       for (const text of ['legacy-frag-one', 'legacy-frag-two', 'Legacy full response.']) {
         this.emit({ type: 'activity', message: text })
@@ -330,6 +434,17 @@ export class FakeProvider implements AgentProvider {
       ...ref,
       message: 'The provider completed the requested objective.'
     })
+  }
+
+  private completeWithMessage(ref: ProviderSessionRef, text: string): void {
+    this.emit({
+      type: 'message.updated',
+      itemId: 'structured-result',
+      turnId: ref.turnId,
+      text,
+      mode: 'complete'
+    })
+    this.complete(ref)
   }
 
   private later(callback: () => void, milliseconds: number): void {

@@ -205,6 +205,42 @@ test('creates and completes a job through the desktop UI', async () => {
   ).toBeVisible()
 })
 
+test('creates an event-driven controller and shows its inactive parent wait', async () => {
+  const harness = await launch()
+  const projectId = await createProject(harness.page, harness.projectDirectory)
+
+  await harness.page.getByRole('button', { name: 'Jobs', exact: true }).click()
+  await harness.page.getByRole('button', { name: 'New job' }).click()
+  await harness.page.getByLabel('Project').selectOption(projectId)
+  await harness.page.getByLabel('Provider').selectOption('fake')
+  await harness.page.getByLabel('Job mode').selectOption('controller')
+  await expect(harness.page.getByText('ASTRA_CONTROLLER · gpt-6-astra · high effort')).toBeVisible()
+  await harness.page.getByLabel('Objective').fill('[delegate][child-delay] route one child')
+  await harness.page.getByRole('button', { name: 'Create and start job' }).click()
+
+  await expect(harness.page.getByText('Waiting for child', { exact: true })).toBeVisible()
+  await expect(
+    harness.page.getByText('Controller is inactive until its child finishes', { exact: true })
+  ).toBeVisible()
+  await expect(harness.page.getByRole('heading', { name: 'Delegation' })).toBeVisible()
+  await expect(
+    harness.page.getByText(/LUNA_QA · runtime QA · gpt-5.6-luna · max effort/)
+  ).toBeVisible()
+  await expect(harness.page.getByText('Completed', { exact: true })).toBeVisible({
+    timeout: 10_000
+  })
+  const jobs = await harness.page.evaluate(async () =>
+    (globalThis as unknown as { orchestrator: OrchestratorApi }).orchestrator.listJobs()
+  )
+  const parent = jobs.find((job) => job.kind === 'controller')!
+  const parentDetail = await detail(harness.page, parent.id)
+  expect(parentDetail.attempts).toHaveLength(2)
+  expect(parentDetail.delegations[0]).toMatchObject({
+    status: 'resumed',
+    result: { status: 'completed' }
+  })
+})
+
 test('surfaces an approval and resumes only after the user approves it', async () => {
   const harness = await launch()
   const projectId = await createProject(harness.page, harness.projectDirectory)
@@ -275,9 +311,7 @@ test('asks for a manual date and time when Codex reset time is unknown', async (
     .click()
 
   await expect(harness.page.getByText('Manual resume time required', { exact: true })).toBeVisible()
-  await expect(
-    harness.page.getByText(/Codex did not provide a reliable reset time/)
-  ).toBeVisible()
+  await expect(harness.page.getByText(/Codex did not provide a reliable reset time/)).toBeVisible()
 
   await expect(harness.page.getByText('Current stage', { exact: true })).toBeVisible()
   await expect(harness.page.getByText('Next', { exact: true })).toBeVisible()

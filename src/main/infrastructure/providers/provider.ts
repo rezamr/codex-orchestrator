@@ -6,11 +6,15 @@ import type {
   LimitEvidence,
   ProviderStatus
 } from '@shared/types/domain'
+import type { ReasoningEffort } from '@shared/types/domain'
 
 export interface ProviderStartRequest {
   objective: string
   cwd: string
   profile: string
+  model?: string
+  effort?: ReasoningEffort
+  outputSchema?: Record<string, unknown>
 }
 
 export interface ProviderResumeRequest extends ProviderStartRequest {

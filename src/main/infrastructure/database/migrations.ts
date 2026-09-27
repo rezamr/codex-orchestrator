@@ -160,6 +160,84 @@ export const migrations: readonly Migration[] = [
     version: 3,
     name: 'remove_manual_codex_executable_override',
     up: `DELETE FROM settings WHERE key = 'codexExecutablePath';`
+  },
+  {
+    version: 4,
+    name: 'event_driven_delegations',
+    up: `
+      ALTER TABLE jobs ADD COLUMN job_kind TEXT NOT NULL DEFAULT 'standard';
+      ALTER TABLE jobs ADD COLUMN requested_model TEXT;
+      ALTER TABLE jobs ADD COLUMN requested_effort TEXT;
+
+      CREATE TABLE delegations (
+        id TEXT PRIMARY KEY,
+        parent_job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+        parent_attempt_id TEXT NOT NULL REFERENCES job_attempts(id) ON DELETE CASCADE,
+        child_job_id TEXT NOT NULL UNIQUE REFERENCES jobs(id) ON DELETE CASCADE,
+        sequence INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        requested_role TEXT NOT NULL,
+        requested_model TEXT NOT NULL,
+        requested_effort TEXT NOT NULL,
+        resolved_model TEXT,
+        resolved_effort TEXT,
+        decision_json TEXT NOT NULL,
+        result_json TEXT,
+        created_at TEXT NOT NULL,
+        child_started_at TEXT,
+        child_finished_at TEXT,
+        parent_resumed_at TEXT,
+        UNIQUE(parent_job_id, parent_attempt_id),
+        UNIQUE(parent_job_id, sequence)
+      );
+
+      CREATE INDEX idx_delegations_parent_status ON delegations(parent_job_id, status);
+      CREATE INDEX idx_delegations_child ON delegations(child_job_id);
+    `
+  },
+  {
+    version: 5,
+    name: 'delegation_policy_audit_and_dormancy_evidence',
+    up: `
+      ALTER TABLE delegations ADD COLUMN orchestration_id TEXT;
+      ALTER TABLE delegations ADD COLUMN child_attempt_id TEXT;
+      ALTER TABLE delegations ADD COLUMN agent_profile TEXT NOT NULL DEFAULT 'LUNA_QA';
+      ALTER TABLE delegations ADD COLUMN task_class TEXT NOT NULL DEFAULT 'runtime_qa';
+      ALTER TABLE delegations ADD COLUMN complexity TEXT NOT NULL DEFAULT 'unknown';
+      ALTER TABLE delegations ADD COLUMN risk_flags_json TEXT NOT NULL DEFAULT '{}';
+      ALTER TABLE delegations ADD COLUMN trigger_event TEXT NOT NULL DEFAULT 'controller.turn_completed';
+      ALTER TABLE delegations ADD COLUMN trigger_at TEXT;
+      ALTER TABLE delegations ADD COLUMN dispatch_requested_at TEXT;
+      ALTER TABLE delegations ADD COLUMN why_selected TEXT NOT NULL DEFAULT '';
+      ALTER TABLE delegations ADD COLUMN why_not_other_developer TEXT NOT NULL DEFAULT '';
+      ALTER TABLE delegations ADD COLUMN policy_match TEXT NOT NULL DEFAULT 'accepted';
+      ALTER TABLE delegations ADD COLUMN wait_strategy TEXT NOT NULL DEFAULT 'provider-terminal-event';
+      ALTER TABLE delegations ADD COLUMN escalated_to TEXT;
+      ALTER TABLE delegations ADD COLUMN escalation_reason TEXT;
+      ALTER TABLE delegations ADD COLUMN source_write INTEGER NOT NULL DEFAULT 0 CHECK (source_write IN (0, 1));
+      ALTER TABLE delegations ADD COLUMN parent_model_turns_while_child_active INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE delegations ADD COLUMN parent_provider_starts_while_child_active INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE delegations ADD COLUMN parent_provider_resumes_while_child_active INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE delegations ADD COLUMN parent_commands_while_child_active INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE delegations ADD COLUMN parent_status_polls_while_child_active INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE delegations ADD COLUMN unsolicited_child_status_requests INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE delegations ADD COLUMN passive_wait_duration_ms INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE delegations ADD COLUMN controller_turn_count INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE delegations ADD COLUMN child_turn_count INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE delegations ADD COLUMN controller_attempt_count INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE delegations ADD COLUMN child_attempt_count INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE delegations ADD COLUMN controller_active_duration_ms INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE delegations ADD COLUMN child_active_duration_ms INTEGER NOT NULL DEFAULT 0;
+
+      UPDATE delegations
+      SET orchestration_id = parent_job_id,
+          trigger_at = created_at,
+          dispatch_requested_at = created_at
+      WHERE orchestration_id IS NULL;
+
+      CREATE INDEX idx_delegations_project_writer
+      ON delegations(source_write, status, child_job_id);
+    `
   }
 ]
 

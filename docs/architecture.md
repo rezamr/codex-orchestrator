@@ -95,6 +95,7 @@ Core entities:
 - **Schedule** — persisted future action.
 - **Approval** — pending or resolved human decision.
 - **VerificationRun** — evidence from completion checks.
+- **Delegation** — durable controller attempt, child job, routing request, and bounded terminal result.
 - **CompletionPolicy** — rules required for successful completion.
 - **PowerPolicy** — optional post-completion system action.
 
@@ -109,6 +110,7 @@ DRAFT
   -> RUNNING
        -> WAITING_FOR_APPROVAL
        -> WAITING_FOR_INPUT
+       -> WAITING_FOR_CHILD
        -> WAITING_FOR_LIMIT
        -> WAITING_FOR_RETRY
        -> PAUSED
@@ -124,6 +126,20 @@ DRAFT
 `STARTING`, `RUNNING`, `VERIFYING`, and waiting states must have explicit legal transitions. Invalid transitions should fail closed and emit diagnostics.
 
 A process exit is an event, not a completion state.
+
+## Event-driven delegation
+
+A controller turn ends before its child starts. On a validated `delegate` action, one transaction creates the child job, stores the delegation, and moves the parent to `WAITING_FOR_CHILD`. The parent provider runtime is then disconnected. This state consumes no provider concurrency slot and cannot schedule inference, tools, polling, or status prompts.
+
+While a child agent is running, the controller consumes zero model turns. Every parent provider start and resume crosses a fail-closed application guard that requires a persisted terminal child result. Child rate-limit, approval, input, authentication, and review waits leave the controller dormant.
+
+The application owns routing through four immutable profiles: `ASTRA_CONTROLLER` (`gpt-6-astra`, high), `LUNA_QA` (`gpt-5.6-luna`, max), `LUNA_DEV` (`gpt-5.6-luna`, max), and `SOL_DEV` (`gpt-5.6-sol`, high). Luna development is allowed only for a proven, bounded, low-complexity change of at most three files when every sensitive-impact flag is false. Uncertainty, broader scope, sensitive impact, or a prior Luna failure routes to Sol. Requested routing is always stored; resolved model and effort remain `UNVERIFIED` unless trusted provider telemetry proves them.
+
+Each delegation stores the routing decision, policy rationale, lifecycle timestamps, attempt identities, result and escalation, plus separate controller and child turn/attempt/duration observations. Parent turns, provider starts/resumes, commands, polls, and unsolicited status requests during child execution are persisted as explicit counters and must remain zero. A durable project writer lease enforces `MAX_CODE_WRITERS=1`; certification runs in a separate non-writing `LUNA_QA` child.
+
+The waiting parent reserves its project from unrelated jobs. Its linked child is the only exception and runs through the normal provider, approval, retry, and verification lifecycle. A completed, blocked, or final failed child outcome stores one redacted bounded result packet. That state transition starts one resume turn on the existing parent session. Unique parent-attempt and child-job constraints make duplicate completion notifications idempotent. A persisted limit of 20 sequential dispatches stops controller loops.
+
+Startup reconciliation is event-driven rather than periodic: it repairs a terminal result that was persisted before parent resume, converts an uncertain child runtime to a failed packet, and does not duplicate a child or parent turn. A parent found in `parent_resuming` after a crash requires review because the previous turn cannot be proven absent.
 
 ## Attempts
 
@@ -196,6 +212,7 @@ SQLite is the durable state store.
 Requirements:
 
 - schema migrations,
+- transactional delegation dispatch and settlement,
 - transactions for state + schedule changes,
 - UTC timestamps internally,
 - indexes for active jobs and due schedules,

@@ -73,6 +73,15 @@ export class ConversationBuffer {
     }
   }
 
+  latestCompletedText(jobId: string, turnId?: string): string | null {
+    const messages = this.jobs.get(jobId)?.messages ?? []
+    const message = [...messages]
+      .reverse()
+      .find((entry) => entry.status === 'completed' && (!turnId || entry.turnId === turnId))
+    if (!message || message.truncated) return null
+    return redactString(message.text)
+  }
+
   clear(): void {
     this.jobs.clear()
   }

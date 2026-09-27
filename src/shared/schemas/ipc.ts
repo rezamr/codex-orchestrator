@@ -12,6 +12,7 @@ export const powerActionSchema = z.enum([
   'restart'
 ])
 export const providerModeSchema = z.enum(['codex', 'fake'])
+export const reasoningEffortSchema = z.enum(['low', 'medium', 'high', 'xhigh', 'max', 'ultra'])
 
 export const retryPolicySchema = z.object({
   maxAutomaticAttempts: z.number().int().min(0).max(20),
@@ -45,6 +46,9 @@ export const createJobSchema = z.object({
   objective: z.string().trim().min(1).max(100_000),
   provider: providerModeSchema,
   profile: z.string().trim().min(1).max(100).optional(),
+  kind: z.enum(['standard', 'controller']).optional(),
+  requestedModel: z.string().trim().min(1).max(200).optional(),
+  requestedEffort: reasoningEffortSchema.optional(),
   retryPolicy: retryPolicySchema,
   verification: z.array(verificationCheckSchema).max(20),
   powerPolicy: powerPolicySchema,

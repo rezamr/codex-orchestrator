@@ -95,6 +95,20 @@ Mitigations:
 - idempotency tokens where provider supports them,
 - visible NEEDS_REVIEW state when certainty is insufficient.
 
+### Delegated output and token amplification
+
+A malicious or malformed controller response could request repeated children, leak source text into durable state, or cause a parent to poll while child work is active.
+
+Mitigations:
+
+- app-server JSON output schemas plus local strict validation,
+- one active child per parent and a persisted 20-child maximum,
+- atomic dispatch with unique parent-attempt and child-job constraints,
+- no parent provider runtime, timer, or prompt in `WAITING_FOR_CHILD`,
+- redaction and fixed size limits before decision/result JSON reaches SQLite,
+- project reservation against unrelated concurrent jobs,
+- conservative review state when parent resume ownership is uncertain.
+
 ### Malicious repository content
 
 A selected repository may contain scripts/instructions that cause agent or verification behavior.
@@ -126,7 +140,11 @@ Sensitive columns should be minimized. Schema must support migrations. Corruptio
 
 ## Logging
 
-Alpha.3 strips terminal controls before secret redaction and frames stderr by line so split escape sequences/credentials are assembled before projection. Legacy job event text is sanitized on read without database rewriting. Streaming transcripts stay in bounded memory, are redacted after assembly, and withhold the unfinished trailing token before transport. They never enter audit logs, SQLite, or diagnostics. The conversation UI uses Vue text escaping and does not execute HTML, scripts, or model-provided links. The job-conversation IPC accepts only a validated job id; main determines the provider/session. External writer conflicts fail closed to review and never authorize terminating another client or removing locks.
+The application validates structured routing and applies its own profile policy before dispatch. Unknown risk is treated as elevated risk. `LUNA_DEV` cannot be selected for authentication, workspace-scope, query, security, database, deployment, architecture, multi-module, unbounded, or unproven work. Only one source-writing child may be active per project, and a developer profile cannot certify its own result.
+
+Parent dormancy is a security and cost boundary. A parent provider call while a child is non-terminal is rejected before provider construction. Dispatch audit records contain bounded, redacted metadata and counters; they exclude credentials, cookies, tokens, full transcripts, and hidden reasoning.
+
+Alpha.3 strips terminal controls before secret redaction and frames stderr by line so split escape sequences/credentials are assembled before projection. Legacy job event text is sanitized on read without database rewriting. Streaming transcripts stay in bounded memory, are redacted after assembly, and withhold the unfinished trailing token before transport. They never enter audit logs, SQLite, or diagnostics. Event-driven delegation stores only the validated routing decision and bounded result packet required for recovery; it never stores full parent/child transcripts. The conversation UI uses Vue text escaping and does not execute HTML, scripts, or model-provided links. The job-conversation IPC accepts only a validated job id; main determines the provider/session. External writer conflicts fail closed to review and never authorize terminating another client or removing locks.
 
 Use structured logs with:
 

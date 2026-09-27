@@ -34,6 +34,14 @@ Because this integration surface may evolve, all raw protocol handling stays ins
 - read account, usage/rate-limit, and saved-thread data through read-only methods,
 - shut down cleanly.
 
+## Event-driven controller routing
+
+Codex CLI `0.155.0-alpha.16` was inspected with `codex app-server generate-json-schema`. Its current schema documents `turn/completed`, `thread/resume`, and the `turn/start` fields `model`, `effort`, and `outputSchema`. Controller and delegated-child JSON contracts use those fields through the provider-neutral request type; raw protocol objects remain inside the Codex adapter.
+
+The application does not keep a parent turn open while a child works. After `turn/completed` supplies one validated controller decision, Orchestrator persists the child and `WAITING_FOR_CHILD`, closes the parent provider runtime, and starts the child separately. The next parent `thread/resume` + `turn/start` occurs only after a terminal child event is stored. There is no status prompt, polling provider read, or elapsed-time wakeup for the parent.
+
+Requested model and effort are durable routing metadata. They are not reported as resolved execution telemetry unless app-server supplies authoritative per-turn evidence; thread configuration is not treated as proof of the model that executed a turn.
+
 ## Authentication
 
 The application should prefer authentication supported by the installed Codex environment.
@@ -129,6 +137,8 @@ The original objective remains immutable job metadata. Continuation text is not 
 
 ## Usage/rate-limit handling
 
+Controller and child starts use immutable application profiles with explicit model and effort. A controller cannot keep an app-server runtime while a delegated child is active. The application waits for provider notifications and does not issue status prompts, provider polling calls, or speculative parent resumes. `turn/completed` or another terminal provider outcome is persisted before the parent can resume. A child waiting for limits or human action is non-terminal and leaves the parent asleep. Runtime-resolved model and effort remain `UNVERIFIED` unless authoritative provider telemetry supplies them.
+
 Do not assume every limit notification contains a complete reset timestamp. Codex account rate-limit notifications may be sparse.
 
 When a usage limit is reached:
@@ -208,6 +218,8 @@ The official event contract identifies `item/completed` as authoritative. Alpha.
 - [OpenAI: App-server protocol, start/resume/read, and item lifecycle](https://learn.chatgpt.com/docs/app-server)
 - [OpenAI: ChatGPT desktop thread deep links](https://learn.chatgpt.com/docs/reference/commands#deep-links)
 - [OpenAI: Desktop and CLI developer commands](https://learn.chatgpt.com/docs/developer-commands)
+- [OpenAI: Using Goals in Codex](https://developers.openai.com/cookbook/examples/codex/using_goals_in_codex) — event-driven continuation at idle turn boundaries.
+- [OpenAI: Agent events and terminal turn outcomes](https://developers.openai.com/api/docs/guides/agents-api/sessions/events) — completion/failure events, not idle state alone, establish turn outcome.
 
 ## Earlier integration references
 

@@ -10,6 +10,7 @@ const labels: Record<string, string> = {
   RUNNING: 'Running',
   WAITING_FOR_APPROVAL: 'Approval required',
   WAITING_FOR_INPUT: 'Input required',
+  WAITING_FOR_CHILD: 'Waiting for child',
   WAITING_FOR_LIMIT: 'Waiting for usage reset',
   WAITING_FOR_RETRY: 'Scheduled retry',
   PAUSED: 'Paused',
@@ -24,7 +25,11 @@ const labels: Record<string, string> = {
 function category(state: string): string {
   if (['COMPLETED'].includes(state)) return 'success'
   if (['FAILED', 'VERIFICATION_FAILED'].includes(state)) return 'danger'
-  if (['WAITING_FOR_APPROVAL', 'WAITING_FOR_INPUT', 'NEEDS_REVIEW'].includes(state))
+  if (
+    ['WAITING_FOR_APPROVAL', 'WAITING_FOR_INPUT', 'WAITING_FOR_CHILD', 'NEEDS_REVIEW'].includes(
+      state
+    )
+  )
     return 'attention'
   if (['RUNNING', 'STARTING', 'VERIFYING'].includes(state)) return 'active'
   return 'neutral'

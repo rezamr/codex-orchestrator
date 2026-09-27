@@ -16,6 +16,7 @@ It does not bypass Codex or OpenAI authentication, safety controls, billing, or 
 
 - Electron desktop shell with a Vue 3 + TypeScript interface and a restrained, keyboard-accessible UI.
 - Project registration and job creation, queueing, lifecycle controls, concurrency protection, and per-project exclusivity.
+- Event-driven controller jobs: a controller returns one structured routing decision, its turn and provider runtime end, and the durable parent remains **Waiting for child** without inference, tools, polling, or status prompts. A terminal child event persists a bounded result packet and resumes the same parent thread once.
 - Codex integration through a provider abstraction, with Codex app-server as the primary provider. The app automatically finds and version-checks the Codex CLI; users do not select the ChatGPT desktop executable. On Windows it checks the per-user Codex CLI installation location and then `PATH`; on macOS/Linux it resolves `codex` from `PATH`.
 - Read-only account mode, plan, usage-limit, token-activity, and local thread history views using supported app-server methods. Active and archived threads are paginated; selecting a conversation reads its turns without resuming it. The thread index is bounded at 20,000 entries and the UI indicates if the bound is reached. Transcript contents are not copied into Orchestrator’s SQLite database.
 - On launch and refresh, account and conversation summaries load into shared UI state: Dashboard shows connected-workspace summaries, Projects groups discovered conversation folders, Jobs shows existing conversations, and Activity shows recent Codex updates separately from Orchestrator's audit events. A local project is not silently registered merely because it appears in Codex.
@@ -47,6 +48,8 @@ The History & sessions screen separates local Codex conversations from Orchestra
 
 ## Architecture
 
+Delegated work uses external event-driven suspension. While a child agent is running, the controller consumes zero model turns. The desktop process persists the dispatch, tears down the controller runtime, waits for a terminal provider event, and resumes the controller once with a bounded result packet. First-class Astra, Luna QA, Luna development, and Sol development profiles are selected through application policy; requested settings are explicit and runtime-resolved settings are shown as `UNVERIFIED` unless the provider proves them.
+
 ```text
 Electron / Vue renderer
           │ narrow typed IPC
@@ -55,7 +58,7 @@ Preload bridge ── validated schemas
           │
           ▼
 Orchestration core ── SQLite + migrations
-    │        │         ├─ persisted scheduler / recovery
+    │        │         ├─ persisted scheduler / delegation recovery
     │        │         ├─ verification / approvals
     │        │         └─ notifications / diagnostics
     │
@@ -64,6 +67,8 @@ Orchestration core ── SQLite + migrations
 ```
 
 Codex-specific JSON-RPC stays behind the provider boundary. The renderer cannot spawn processes, access SQLite, or invoke operating-system power operations directly. MCP may support future tools and integrations, but it is not the lifecycle control channel for starting, resuming, or monitoring Codex.
+
+Controller and child turns use the installed app-server's supported `turn/start` model, effort, and output-schema fields. `turn/completed` drives settlement. While a child runs, the parent is represented only by SQLite state; there is no parent app-server process, polling timer, or model turn. Full transcripts remain memory-only or are read on demand. Schema 5 stores bounded routing policy, audit, result, and usage-observation metadata.
 
 ## Codex connection and local data
 

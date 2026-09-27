@@ -25,6 +25,7 @@ The requirements below also record product intent. Reusable profiles, project-sp
 9. Default to local storage and least privilege.
 10. Be suitable for public use, contribution, and forking.
 11. Discover the supported Codex CLI automatically and expose current account/usage state and local conversation history through read-only app-server calls.
+12. Suspend controller inference externally while delegated child work runs, then resume once from a durable bounded result.
 
 ## Non-goals for the initial release
 
@@ -58,6 +59,12 @@ The dashboard shows:
 - retry or resume schedule,
 - verification status,
 - completion action.
+
+### Delegate without parent token burn
+
+For controller-mode jobs, the controller returns one structured action. A delegated child is persisted before it starts, the controller turn ends, and the parent becomes `WAITING_FOR_CHILD` without an active provider runtime. Child terminal events, rather than controller polling, trigger one resume with a bounded result packet. The UI shows the linked jobs, requested model/effort, and whether the parent is inactive.
+
+While a child agent is running, the controller consumes zero model turns. The orchestrator enforces this at the provider boundary, records zero-activity counters, owns profile selection, limits source writing to one child per project, and requires separate QA certification.
 
 ### Usage-limit wait and resume
 
@@ -116,6 +123,7 @@ If configured, a disruptive power action is eligible only after successful verif
 - Support one or more active jobs subject to configurable concurrency.
 - Keep retry counts and policies bounded.
 - Allow user notes/tags without changing provider prompts.
+- Support explicit standard, controller, and internal delegated-child kinds with one active child per controller and a bounded delegation count.
 
 ### Sessions
 

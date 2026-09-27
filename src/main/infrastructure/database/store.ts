@@ -9,6 +9,8 @@ import type {
   Approval,
   Attempt,
   CreateJobInput,
+  Delegation,
+  DelegationResultPacket,
   Job,
   JobDetail,
   JobEvent,
@@ -19,6 +21,8 @@ import type {
   VerificationCheckResult,
   VerificationRun
 } from '@shared/types/domain'
+import type { ControllerDecision } from '@main/domain/delegation-contracts'
+import type { RoutingPolicyResult } from '@main/domain/agent-profiles'
 import { currentSchemaVersion, migrate } from './migrations'
 
 const defaultSettings: AppSettings = {
@@ -66,6 +70,11 @@ function mapJob(row: Record<string, unknown>): Job {
     state: String(row.state) as JobState,
     provider: String(row.provider) as Job['provider'],
     profile: String(row.profile),
+    kind: String(row.job_kind ?? 'standard') as Job['kind'],
+    requestedModel: row.requested_model ? String(row.requested_model) : null,
+    requestedEffort: row.requested_effort
+      ? (String(row.requested_effort) as Job['requestedEffort'])
+      : null,
     retryPolicy: parseJson(String(row.retry_policy_json), {
       maxAutomaticAttempts: 3,
       baseDelaySeconds: 60,
@@ -86,6 +95,65 @@ function mapJob(row: Record<string, unknown>): Job {
     completedAt: row.completed_at ? String(row.completed_at) : null,
     nextActionAt: row.next_action_at ? String(row.next_action_at) : null,
     stateReason: row.state_reason ? String(row.state_reason) : null
+  }
+}
+
+function mapDelegation(row: Record<string, unknown>): Delegation {
+  return {
+    id: String(row.id),
+    orchestrationId: String(row.orchestration_id ?? row.parent_job_id),
+    parentJobId: String(row.parent_job_id),
+    parentAttemptId: String(row.parent_attempt_id),
+    childJobId: String(row.child_job_id),
+    childAttemptId: row.child_attempt_id ? String(row.child_attempt_id) : null,
+    sequence: Number(row.sequence),
+    status: String(row.status) as Delegation['status'],
+    requestedRole: String(row.requested_role),
+    agentProfile: String(row.agent_profile ?? 'LUNA_QA') as Delegation['agentProfile'],
+    taskClass: String(row.task_class ?? 'runtime_qa') as Delegation['taskClass'],
+    complexity: String(row.complexity ?? 'unknown') as Delegation['complexity'],
+    riskFlags: parseJson(String(row.risk_flags_json ?? '{}'), {}),
+    requestedModel: String(row.requested_model),
+    requestedEffort: String(row.requested_effort) as Delegation['requestedEffort'],
+    resolvedModel: row.resolved_model ? String(row.resolved_model) : null,
+    resolvedEffort: row.resolved_effort
+      ? (String(row.resolved_effort) as Delegation['resolvedEffort'])
+      : null,
+    decision: parseJson(String(row.decision_json), {}),
+    result: row.result_json
+      ? parseJson<DelegationResultPacket | null>(String(row.result_json), null)
+      : null,
+    triggerEvent: String(row.trigger_event ?? 'controller.turn_completed'),
+    triggerAt: String(row.trigger_at ?? row.created_at),
+    dispatchRequestedAt: String(row.dispatch_requested_at ?? row.created_at),
+    whySelected: String(row.why_selected ?? ''),
+    whyNotOtherDeveloper: String(row.why_not_other_developer ?? ''),
+    policyMatch: String(row.policy_match ?? 'accepted') as Delegation['policyMatch'],
+    waitStrategy: String(row.wait_strategy ?? 'provider-terminal-event'),
+    escalatedTo: row.escalated_to ? String(row.escalated_to) : null,
+    escalationReason: row.escalation_reason ? String(row.escalation_reason) : null,
+    sourceWrite: bool(row.source_write),
+    parentModelTurnsWhileChildActive: Number(row.parent_model_turns_while_child_active ?? 0),
+    parentProviderStartsWhileChildActive: Number(
+      row.parent_provider_starts_while_child_active ?? 0
+    ),
+    parentProviderResumesWhileChildActive: Number(
+      row.parent_provider_resumes_while_child_active ?? 0
+    ),
+    parentCommandsWhileChildActive: Number(row.parent_commands_while_child_active ?? 0),
+    parentStatusPollsWhileChildActive: Number(row.parent_status_polls_while_child_active ?? 0),
+    unsolicitedChildStatusRequests: Number(row.unsolicited_child_status_requests ?? 0),
+    passiveWaitDurationMs: Number(row.passive_wait_duration_ms ?? 0),
+    controllerTurnCount: Number(row.controller_turn_count ?? 1),
+    childTurnCount: Number(row.child_turn_count ?? 0),
+    controllerAttemptCount: Number(row.controller_attempt_count ?? 1),
+    childAttemptCount: Number(row.child_attempt_count ?? 0),
+    controllerActiveDurationMs: Number(row.controller_active_duration_ms ?? 0),
+    childActiveDurationMs: Number(row.child_active_duration_ms ?? 0),
+    createdAt: String(row.created_at),
+    childStartedAt: row.child_started_at ? String(row.child_started_at) : null,
+    childFinishedAt: row.child_finished_at ? String(row.child_finished_at) : null,
+    parentResumedAt: row.parent_resumed_at ? String(row.parent_resumed_at) : null
   }
 }
 
@@ -227,8 +295,9 @@ export class OrchestrationStore {
         .prepare(
           `INSERT INTO jobs(
             id, project_id, objective, state, provider, profile, retry_policy_json,
-            verification_json, power_policy_json, note, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            verification_json, power_policy_json, note, created_at, updated_at,
+            job_kind, requested_model, requested_effort
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           id,
@@ -242,7 +311,10 @@ export class OrchestrationStore {
           JSON.stringify(input.powerPolicy),
           input.note ?? '',
           now,
-          now
+          now,
+          input.kind ?? 'standard',
+          input.requestedModel ?? null,
+          input.requestedEffort ?? null
         )
       this.insertEvent(id, null, 'job.created', 'info', 'Job created and persisted.', {
         initialState
@@ -452,6 +524,288 @@ export class OrchestrationStore {
       )
       return job
     })()
+  }
+
+  createDelegation(
+    parentJobId: string,
+    parentAttemptId: string,
+    decision: Extract<ControllerDecision, { action: 'delegate' }>,
+    routing: RoutingPolicyResult
+  ): { delegation: Delegation; child: Job } {
+    return this.database.transaction(() => {
+      const parent = this.getJob(parentJobId)
+      if (parent.kind !== 'controller' || parent.state !== 'RUNNING') {
+        throw new AppError('INVALID_TRANSITION', 'Only a running controller can dispatch a child.')
+      }
+      const sequenceRow = this.database
+        .prepare(
+          'SELECT COALESCE(MAX(sequence), 0) + 1 AS sequence FROM delegations WHERE parent_job_id = ?'
+        )
+        .get(parentJobId) as { sequence: number }
+      const sequence = Number(sequenceRow.sequence)
+      const activeWriter = this.database
+        .prepare(
+          `SELECT d.id FROM delegations d
+           JOIN jobs j ON j.id = d.child_job_id
+           WHERE j.project_id = ? AND d.source_write = 1
+             AND d.status IN ('child_queued', 'child_running')
+           LIMIT 1`
+        )
+        .get(parent.projectId)
+      if (activeWriter) {
+        if (routing.selectedProfile.sourceWrite) {
+          throw new AppError(
+            'CONCURRENCY_LIMIT',
+            'MAX_CODE_WRITERS=1: this project already has an active source-writing child.'
+          )
+        }
+        throw new AppError(
+          'CONCURRENCY_LIMIT',
+          'QA cannot start until the active source writer reaches a stable terminal result.'
+        )
+      }
+      const child = this.createJob({
+        projectId: parent.projectId,
+        objective: decision.child.instruction,
+        provider: parent.provider,
+        profile: routing.selectedProfile.id,
+        kind: 'delegated-child',
+        requestedModel: routing.selectedProfile.model,
+        requestedEffort: routing.selectedProfile.effort,
+        retryPolicy: parent.retryPolicy,
+        verification: [],
+        powerPolicy: { action: 'none', countdownSeconds: 60, preventSleepWhileActive: true },
+        note: `Delegated by controller ${parentJobId}.`,
+        startImmediately: true
+      })
+      const now = new Date().toISOString()
+      const id = randomUUID()
+      const orchestrationId = parentJobId
+      const parentAttempt = this.getLatestAttempt(parentJobId)
+      const controllerDuration = parentAttempt
+        ? Math.max(0, Date.now() - Date.parse(parentAttempt.startedAt))
+        : 0
+      this.database
+        .prepare(
+          `INSERT INTO delegations(
+            id, parent_job_id, parent_attempt_id, child_job_id, sequence, status,
+            requested_role, requested_model, requested_effort, decision_json, created_at,
+            orchestration_id, agent_profile, task_class, complexity, risk_flags_json,
+            trigger_at, dispatch_requested_at, why_selected, why_not_other_developer,
+            policy_match, escalated_to, escalation_reason, source_write,
+            controller_active_duration_ms
+          ) VALUES (?, ?, ?, ?, ?, 'child_queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          id,
+          parentJobId,
+          parentAttemptId,
+          child.id,
+          sequence,
+          routing.selectedProfile.role,
+          routing.selectedProfile.model,
+          routing.selectedProfile.effort,
+          JSON.stringify(decision),
+          now,
+          orchestrationId,
+          routing.selectedProfile.id,
+          decision.child.taskClass,
+          decision.child.complexity,
+          JSON.stringify(decision.child.risk),
+          now,
+          now,
+          routing.whySelected,
+          routing.whyNotOtherDeveloper,
+          routing.policyMatch,
+          routing.escalatedTo,
+          routing.escalatedTo ? routing.whySelected : null,
+          routing.selectedProfile.sourceWrite ? 1 : 0,
+          controllerDuration
+        )
+      this.transitionJob(
+        parentJobId,
+        'WAITING_FOR_CHILD',
+        `Controller suspended while delegated child ${sequence} runs.`,
+        { attemptId: parentAttemptId }
+      )
+      this.insertEvent(
+        parentJobId,
+        parentAttemptId,
+        'delegation.dispatched',
+        'info',
+        'Delegated child persisted and queued.',
+        {
+          delegationId: id,
+          childJobId: child.id,
+          sequence,
+          orchestrationId,
+          role: routing.selectedProfile.role,
+          profile: routing.selectedProfile.id,
+          requestedModel: routing.selectedProfile.model,
+          requestedEffort: routing.selectedProfile.effort,
+          policyMatch: routing.policyMatch,
+          escalatedTo: routing.escalatedTo,
+          waitStrategy: 'provider-terminal-event'
+        }
+      )
+      return { delegation: this.getDelegation(id), child }
+    })()
+  }
+
+  getDelegation(id: string): Delegation {
+    const row = this.database.prepare('SELECT * FROM delegations WHERE id = ?').get(id)
+    if (!row) throw new AppError('PERSISTENCE', 'Delegation was not found.')
+    return mapDelegation(row as Record<string, unknown>)
+  }
+
+  getDelegationsForJob(jobId: string): Delegation[] {
+    return this.database
+      .prepare(
+        'SELECT * FROM delegations WHERE parent_job_id = ? OR child_job_id = ? ORDER BY created_at DESC'
+      )
+      .all(jobId, jobId)
+      .map((row) => mapDelegation(row as Record<string, unknown>))
+  }
+
+  getDelegationForChild(childJobId: string): Delegation | null {
+    const row = this.database
+      .prepare('SELECT * FROM delegations WHERE child_job_id = ?')
+      .get(childJobId)
+    return row ? mapDelegation(row as Record<string, unknown>) : null
+  }
+
+  getLatestDelegationForParent(parentJobId: string): Delegation | null {
+    const row = this.database
+      .prepare('SELECT * FROM delegations WHERE parent_job_id = ? ORDER BY sequence DESC LIMIT 1')
+      .get(parentJobId)
+    return row ? mapDelegation(row as Record<string, unknown>) : null
+  }
+
+  listOpenDelegations(): Delegation[] {
+    return this.database
+      .prepare(
+        "SELECT * FROM delegations WHERE status NOT IN ('resumed', 'cancelled') ORDER BY created_at"
+      )
+      .all()
+      .map((row) => mapDelegation(row as Record<string, unknown>))
+  }
+
+  delegationCount(parentJobId: string): number {
+    const row = this.database
+      .prepare('SELECT COUNT(*) AS count FROM delegations WHERE parent_job_id = ?')
+      .get(parentJobId) as { count: number }
+    return Number(row.count)
+  }
+
+  lunaDevelopmentFailed(parentJobId: string): boolean {
+    const row = this.database
+      .prepare(
+        `SELECT 1 FROM delegations
+         WHERE parent_job_id = ? AND agent_profile = 'LUNA_DEV'
+           AND json_extract(result_json, '$.status') = 'failed'
+         LIMIT 1`
+      )
+      .get(parentJobId)
+    return Boolean(row)
+  }
+
+  markDelegatedChildRunning(childJobId: string, childAttemptId: string): void {
+    this.database
+      .prepare(
+        `UPDATE delegations
+         SET status = 'child_running', child_started_at = COALESCE(child_started_at, ?),
+             child_attempt_id = ?, child_turn_count = child_turn_count + 1,
+             child_attempt_count = child_attempt_count + 1
+         WHERE child_job_id = ? AND status IN ('child_queued', 'child_running')`
+      )
+      .run(new Date().toISOString(), childAttemptId, childJobId)
+  }
+
+  settleDelegation(
+    childJobId: string,
+    status: 'child_completed' | 'child_blocked' | 'child_failed',
+    result: DelegationResultPacket
+  ): Delegation | null {
+    const now = new Date().toISOString()
+    const current = this.getDelegationForChild(childJobId)
+    const waitDuration = current ? Math.max(0, Date.now() - Date.parse(current.createdAt)) : 0
+    const childDuration = current?.childStartedAt
+      ? Math.max(0, Date.now() - Date.parse(current.childStartedAt))
+      : 0
+    const updated = this.database
+      .prepare(
+        `UPDATE delegations SET status = ?, result_json = ?, child_finished_at = ?,
+         passive_wait_duration_ms = ?, child_active_duration_ms = ?
+         WHERE child_job_id = ? AND status IN ('child_queued', 'child_running')`
+      )
+      .run(status, JSON.stringify(result), now, waitDuration, childDuration, childJobId)
+    if (!updated.changes) return null
+    return this.getDelegationForChild(childJobId)
+  }
+
+  markParentResuming(parentJobId: string): Delegation | null {
+    const latest = this.getLatestDelegationForParent(parentJobId)
+    if (
+      !latest ||
+      !['child_completed', 'child_blocked', 'child_failed', 'parent_resuming'].includes(
+        latest.status
+      )
+    )
+      return null
+    if (latest.status !== 'parent_resuming') {
+      this.database
+        .prepare(
+          `UPDATE delegations SET status = 'parent_resuming',
+           controller_attempt_count = controller_attempt_count + 1
+           WHERE id = ?`
+        )
+        .run(latest.id)
+    }
+    return this.getDelegation(latest.id)
+  }
+
+  markParentResumed(parentJobId: string): void {
+    const latest = this.getLatestDelegationForParent(parentJobId)
+    if (!latest || latest.status !== 'parent_resuming') return
+    this.database
+      .prepare(
+        "UPDATE delegations SET status = 'resumed', parent_resumed_at = ? WHERE id = ? AND status = 'parent_resuming'"
+      )
+      .run(new Date().toISOString(), latest.id)
+  }
+
+  markParentControllerTurnStarted(parentJobId: string): void {
+    const latest = this.getLatestDelegationForParent(parentJobId)
+    if (!latest || latest.status !== 'parent_resuming') return
+    this.database
+      .prepare(
+        `UPDATE delegations SET controller_turn_count = controller_turn_count + 1
+         WHERE id = ? AND status = 'parent_resuming'`
+      )
+      .run(latest.id)
+  }
+
+  recordControllerTurnFinished(parentJobId: string, attemptId: string): void {
+    const delegation = this.getLatestDelegationForParent(parentJobId)
+    if (!delegation) return
+    const attempt = this.getLatestAttempt(parentJobId)
+    if (!attempt || attempt.id !== attemptId) return
+    const duration = Math.max(0, Date.now() - Date.parse(attempt.startedAt))
+    this.database
+      .prepare(
+        `UPDATE delegations
+         SET controller_active_duration_ms = controller_active_duration_ms + ?
+         WHERE id = ?`
+      )
+      .run(duration, delegation.id)
+  }
+
+  cancelDelegation(parentJobId: string): void {
+    this.database
+      .prepare(
+        "UPDATE delegations SET status = 'cancelled' WHERE parent_job_id = ? AND status NOT IN ('resumed', 'cancelled')"
+      )
+      .run(parentJobId)
   }
 
   appendEvent(
@@ -813,6 +1167,7 @@ export class OrchestrationStore {
       schedules,
       approvals,
       verificationRuns: this.getVerificationRuns(id),
+      delegations: this.getDelegationsForJob(id),
       powerCountdown: power
         ? {
             scheduleId: power.id,
@@ -848,7 +1203,8 @@ export class OrchestrationStore {
       'job_events',
       'schedules',
       'approvals',
-      'verification_runs'
+      'verification_runs',
+      'delegations'
     ]
     return Object.fromEntries(
       tables.map((table) => {

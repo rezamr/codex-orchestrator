@@ -222,6 +222,7 @@ input.on('line', (line) => {
     return
   }
   if (method === 'turn/start') {
+    if (callLog) appendFileSync(callLog, `turn/start.params:${JSON.stringify(params)}\n`)
     turnNumber += 1
     const turnId = `fixture-turn-${turnNumber}`
     send({ id, result: { turn: { id: turnId } } })

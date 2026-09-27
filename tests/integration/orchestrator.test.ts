@@ -10,6 +10,7 @@ import { FakeProvider } from '@main/infrastructure/providers/fake-provider'
 import type { JobState, PowerAction } from '@shared/types/domain'
 import { AppError } from '@shared/errors'
 import type { ProviderResumeRequest } from '@main/infrastructure/providers/provider'
+import { AGENT_PROFILES } from '@main/domain/agent-profiles'
 
 const directories: string[] = []
 const instances: Array<{ orchestrator: Orchestrator; store: OrchestrationStore }> = []
@@ -63,6 +64,342 @@ function jobInput(projectId: string, objective: string, action: PowerAction = 'n
 }
 
 describe('orchestrator fake-provider workflows', () => {
+  it('ends parent inference while a delegated child runs and resumes the parent exactly once', async () => {
+    const { orchestrator, store, project } = await setup()
+    const startSpy = vi.spyOn(FakeProvider.prototype, 'start')
+    const resumeSpy = vi.spyOn(FakeProvider.prototype, 'resume')
+    try {
+      const parent = await orchestrator.createJob({
+        ...jobInput(project.id, '[delegate][child-delay] route one child'),
+        kind: 'controller',
+        requestedModel: 'gpt-6-astra',
+        requestedEffort: 'high'
+      })
+      await waitForState(store, parent.id, 'WAITING_FOR_CHILD')
+      const delegation = store.getLatestDelegationForParent(parent.id)
+      expect(delegation).toMatchObject({
+        status: expect.stringMatching(/^child_/),
+        agentProfile: 'LUNA_QA',
+        requestedModel: 'gpt-5.6-luna',
+        requestedEffort: 'max',
+        resolvedModel: null,
+        resolvedEffort: null,
+        parentModelTurnsWhileChildActive: 0,
+        parentProviderStartsWhileChildActive: 0,
+        parentProviderResumesWhileChildActive: 0,
+        parentCommandsWhileChildActive: 0,
+        parentStatusPollsWhileChildActive: 0,
+        unsolicitedChildStatusRequests: 0
+      })
+      expect(store.getJob(delegation!.childJobId).kind).toBe('delegated-child')
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      expect(
+        resumeSpy.mock.calls.filter(
+          ([request]) => request.outputSchema?.$id === 'codex-orchestrator-controller-decision-v1'
+        )
+      ).toHaveLength(0)
+
+      await waitForState(store, parent.id, 'COMPLETED', 3_000)
+      expect(
+        resumeSpy.mock.calls.filter(
+          ([request]) => request.outputSchema?.$id === 'codex-orchestrator-controller-decision-v1'
+        )
+      ).toHaveLength(1)
+      expect(startSpy).toHaveBeenCalledTimes(2)
+      expect(store.getLatestDelegationForParent(parent.id)).toMatchObject({
+        status: 'resumed',
+        result: { status: 'completed' }
+      })
+      expect(store.getJobDetail(parent.id).attempts).toHaveLength(2)
+    } finally {
+      startSpy.mockRestore()
+      resumeSpy.mockRestore()
+    }
+  })
+
+  it('simulates a long child interval with zero parent work and fails closed on early resume', async () => {
+    const { orchestrator, store, project } = await setup()
+    const resumeSpy = vi.spyOn(FakeProvider.prototype, 'resume')
+    try {
+      const parent = await orchestrator.createJob({
+        ...jobInput(project.id, '[delegate][child-delay] simulate a long child'),
+        kind: 'controller'
+      })
+      await waitForState(store, parent.id, 'WAITING_FOR_CHILD')
+      const delegation = store.getLatestDelegationForParent(parent.id)!
+      store.database
+        .prepare('UPDATE delegations SET created_at = ?, trigger_at = ? WHERE id = ?')
+        .run(
+          new Date(Date.now() - 30_000).toISOString(),
+          new Date(Date.now() - 30_000).toISOString(),
+          delegation.id
+        )
+
+      await expect(
+        (orchestrator as unknown as { startJob: (id: string) => Promise<void> }).startJob(parent.id)
+      ).rejects.toThrow('PARENT_MODEL_ACTIVE_WHILE_CHILD_RUNNING=FALSE')
+      expect(store.getJob(parent.id).state).toBe('WAITING_FOR_CHILD')
+      expect(resumeSpy).not.toHaveBeenCalled()
+      expect(store.getLatestDelegationForParent(parent.id)).toMatchObject({
+        parentModelTurnsWhileChildActive: 0,
+        parentProviderStartsWhileChildActive: 0,
+        parentProviderResumesWhileChildActive: 0,
+        parentCommandsWhileChildActive: 0,
+        parentStatusPollsWhileChildActive: 0,
+        unsolicitedChildStatusRequests: 0
+      })
+
+      await waitForState(store, parent.id, 'COMPLETED', 3_000)
+      expect(resumeSpy).toHaveBeenCalledTimes(1)
+      expect(
+        store.getLatestDelegationForParent(parent.id)!.passiveWaitDurationMs
+      ).toBeGreaterThanOrEqual(30_000)
+    } finally {
+      resumeSpy.mockRestore()
+    }
+  })
+
+  it('keeps the parent asleep while a delegated child waits for a provider limit', async () => {
+    const { orchestrator, store, project } = await setup()
+    const resumeSpy = vi.spyOn(FakeProvider.prototype, 'resume')
+    try {
+      const parent = await orchestrator.createJob({
+        ...jobInput(project.id, '[delegate][child-limit] child waits for limit'),
+        kind: 'controller'
+      })
+      await waitForState(store, parent.id, 'WAITING_FOR_CHILD')
+      const delegation = store.getLatestDelegationForParent(parent.id)!
+      await waitForState(store, delegation.childJobId, 'WAITING_FOR_LIMIT')
+      expect(store.getJob(parent.id).state).toBe('WAITING_FOR_CHILD')
+      expect(resumeSpy).toHaveBeenCalledTimes(0)
+      expect(store.getLatestDelegationForParent(parent.id)).toMatchObject({
+        parentModelTurnsWhileChildActive: 0,
+        parentStatusPollsWhileChildActive: 0
+      })
+
+      await waitForState(store, parent.id, 'COMPLETED', 4_000)
+      const controllerResumes = resumeSpy.mock.calls.filter(
+        ([request]) => request.outputSchema?.$id === 'codex-orchestrator-controller-decision-v1'
+      )
+      expect(controllerResumes).toHaveLength(1)
+    } finally {
+      resumeSpy.mockRestore()
+    }
+  })
+
+  it.each([
+    ['bounded development', '[delegate][dev-low]', 'LUNA_DEV', 'gpt-5.6-luna', 'accepted'],
+    ['authentication impact', '[delegate][dev-auth]', 'SOL_DEV', 'gpt-5.6-sol', 'escalated']
+  ])(
+    'applies application-owned routing for %s',
+    async (_label, objective, profile, model, policyMatch) => {
+      const { orchestrator, store, project } = await setup()
+      const parent = await orchestrator.createJob({
+        ...jobInput(project.id, objective),
+        kind: 'controller',
+        requestedModel: 'untrusted-controller-input',
+        requestedEffort: 'low'
+      })
+      expect(store.getJob(parent.id)).toMatchObject({
+        profile: 'ASTRA_CONTROLLER',
+        requestedModel: 'gpt-6-astra',
+        requestedEffort: 'high'
+      })
+      await waitForState(store, parent.id, 'COMPLETED')
+      expect(store.getLatestDelegationForParent(parent.id)).toMatchObject({
+        agentProfile: profile,
+        requestedModel: model,
+        policyMatch,
+        resolvedModel: null,
+        resolvedEffort: null
+      })
+    }
+  )
+
+  it('blocks a second source writer even when project exclusivity is disabled', async () => {
+    const { orchestrator, store, project } = await setup()
+    store.updateSettings({ maxConcurrentJobs: 4, perProjectExclusive: false })
+    const first = await orchestrator.createJob({
+      ...jobInput(project.id, '[delegate][dev-low][child-delay] first writer'),
+      kind: 'controller'
+    })
+    const second = await orchestrator.createJob({
+      ...jobInput(project.id, '[delegate][dev-low][child-delay] second writer'),
+      kind: 'controller'
+    })
+
+    const deadline = Date.now() + 2_000
+    while (Date.now() < deadline) {
+      const states = [store.getJob(first.id).state, store.getJob(second.id).state]
+      if (states.includes('WAITING_FOR_CHILD') && states.includes('NEEDS_REVIEW')) break
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+    expect([store.getJob(first.id).state, store.getJob(second.id).state].sort()).toEqual(
+      ['NEEDS_REVIEW', 'WAITING_FOR_CHILD'].sort()
+    )
+    const activeWriters = store
+      .getDelegationsForJob(first.id)
+      .concat(store.getDelegationsForJob(second.id))
+      .filter(
+        (entry) => entry.sourceWrite && ['child_queued', 'child_running'].includes(entry.status)
+      )
+    expect(activeWriters).toHaveLength(1)
+  })
+
+  it('routes malformed child output through bounded review and one parent decision', async () => {
+    const { orchestrator, store, project } = await setup()
+    const parent = await orchestrator.createJob({
+      ...jobInput(project.id, '[delegate][child-malformed] reject malformed output'),
+      kind: 'controller'
+    })
+    await waitForState(store, parent.id, 'COMPLETED')
+    const delegation = store.getLatestDelegationForParent(parent.id)!
+    expect(store.getJob(delegation.childJobId).state).toBe('NEEDS_REVIEW')
+    expect(delegation.result).toMatchObject({ status: 'failed' })
+    expect(store.getJobDetail(parent.id).attempts).toHaveLength(2)
+  })
+
+  it('keeps an uncertain active child and its parent dormant after restart without duplication', async () => {
+    const { orchestrator, store, project } = await setup()
+    const startSpy = vi.spyOn(FakeProvider.prototype, 'start')
+    try {
+      const parent = await orchestrator.createJob({
+        ...jobInput(project.id, '[delegate][child-delay] interrupted child'),
+        kind: 'controller'
+      })
+      await waitForState(store, parent.id, 'WAITING_FOR_CHILD')
+      const delegation = store.getLatestDelegationForParent(parent.id)!
+      await waitForState(store, delegation.childJobId, 'RUNNING')
+      const startsBeforeRestart = startSpy.mock.calls.length
+      await orchestrator.shutdown()
+      instances.splice(0)
+
+      const recovered = new Orchestrator(store, new FakePowerAdapter(), new StructuredLogger())
+      instances.push({ orchestrator: recovered, store })
+      await recovered.initialize()
+      await new Promise((resolve) => setTimeout(resolve, 100))
+
+      expect(store.getJob(parent.id).state).toBe('WAITING_FOR_CHILD')
+      expect(store.getJob(delegation.childJobId).state).toBe('NEEDS_REVIEW')
+      expect(store.getLatestDelegationForParent(parent.id)?.status).toBe('child_running')
+      expect(startSpy.mock.calls.length).toBe(startsBeforeRestart)
+    } finally {
+      startSpy.mockRestore()
+    }
+  })
+
+  it.each([
+    ['blocked', '[delegate][child-blocked] route a blocked child', 'NEEDS_REVIEW'],
+    ['failed', '[delegate][child-fail] route a failed child', 'FAILED']
+  ])('resumes once when a delegated child is %s', async (_label, objective, expectedChildState) => {
+    const { orchestrator, store, project } = await setup()
+    const resumeSpy = vi.spyOn(FakeProvider.prototype, 'resume')
+    try {
+      const parent = await orchestrator.createJob({
+        ...jobInput(project.id, objective),
+        kind: 'controller',
+        requestedModel: 'gpt-6-astra',
+        requestedEffort: 'high'
+      })
+      await waitForState(store, parent.id, 'COMPLETED')
+      const delegation = store.getLatestDelegationForParent(parent.id)
+      expect(delegation).toMatchObject({
+        status: 'resumed',
+        result: { status: _label }
+      })
+      expect(store.getJob(delegation!.childJobId).state).toBe(expectedChildState)
+      expect(
+        store
+          .listEvents(parent.id)
+          .filter(
+            (event) => event.type === 'delegation.settled' && event.metadata.status === _label
+          )
+      ).toHaveLength(1)
+      expect(
+        resumeSpy.mock.calls.filter(
+          ([request]) => request.outputSchema?.$id === 'codex-orchestrator-controller-decision-v1'
+        )
+      ).toHaveLength(1)
+    } finally {
+      resumeSpy.mockRestore()
+    }
+  })
+
+  it('recovers a persisted child result after restart and resumes the parent once', async () => {
+    const projectPath = await mkdtemp(join(tmpdir(), 'codex-orchestrator-delegation-recovery-'))
+    directories.push(projectPath)
+    const store = new OrchestrationStore(':memory:')
+    const project = store.createProject('Recovery', projectPath)
+    const parent = store.createJob({
+      ...jobInput(project.id, '[delegate] recover from a settled child'),
+      kind: 'controller',
+      requestedModel: 'gpt-6-astra',
+      requestedEffort: 'high',
+      startImmediately: false
+    })
+    store.transitionJob(parent.id, 'QUEUED', 'queued')
+    const attempt = store.createAttempt(parent.id, 'start')
+    store.transitionJob(parent.id, 'STARTING', 'starting', { attemptId: attempt.id })
+    store.transitionJob(parent.id, 'RUNNING', 'running', { attemptId: attempt.id })
+    store.saveSession(parent.id, 'fake', 'fixture-parent-recovery')
+    const { child } = store.createDelegation(
+      parent.id,
+      attempt.id,
+      {
+        action: 'delegate',
+        summary: 'Persist before restart.',
+        child: {
+          profile: 'LUNA_QA',
+          taskClass: 'runtime_qa',
+          complexity: 'low',
+          bounded: true,
+          rootCauseProven: true,
+          expectedFiles: 0,
+          multiModule: false,
+          risk: {
+            authentication: 'no',
+            workspaceScope: 'no',
+            query: 'no',
+            security: 'no',
+            database: 'no',
+            deployment: 'no',
+            architecture: 'no'
+          },
+          instruction: 'Already finished before restart.'
+        }
+      },
+      {
+        requestedProfile: 'LUNA_QA',
+        selectedProfile: AGENT_PROFILES.LUNA_QA,
+        policyMatch: 'accepted',
+        whySelected: 'Runtime QA.',
+        whyNotOtherDeveloper: 'Independent QA.',
+        escalatedTo: null
+      }
+    )
+    store.transitionJob(child.id, 'STARTING', 'child started')
+    store.transitionJob(child.id, 'RUNNING', 'child ran')
+    store.transitionJob(child.id, 'VERIFYING', 'child verified')
+    store.transitionJob(child.id, 'COMPLETED', 'child completed')
+    store.settleDelegation(child.id, 'child_completed', {
+      status: 'completed',
+      summary: 'Recovered child result.',
+      evidence: ['Persisted before restart.'],
+      nextAction: null
+    })
+    const orchestrator = new Orchestrator(store, new FakePowerAdapter(), new StructuredLogger())
+    instances.push({ orchestrator, store })
+    const resumeSpy = vi.spyOn(FakeProvider.prototype, 'resume')
+    try {
+      await orchestrator.initialize()
+      await waitForState(store, parent.id, 'COMPLETED')
+      expect(resumeSpy).toHaveBeenCalledTimes(1)
+      expect(store.getLatestDelegationForParent(parent.id)?.status).toBe('resumed')
+    } finally {
+      resumeSpy.mockRestore()
+    }
+  })
+
   it('requires review for an external writer, retains the session, and retries only manually', async () => {
     const { orchestrator, store, power, project } = await setup()
     const job = store.createJob({

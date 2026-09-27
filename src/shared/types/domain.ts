@@ -5,6 +5,7 @@ export const JOB_STATES = [
   'RUNNING',
   'WAITING_FOR_APPROVAL',
   'WAITING_FOR_INPUT',
+  'WAITING_FOR_CHILD',
   'WAITING_FOR_LIMIT',
   'WAITING_FOR_RETRY',
   'PAUSED',
@@ -17,6 +18,8 @@ export const JOB_STATES = [
 ] as const
 
 export type JobState = (typeof JOB_STATES)[number]
+export type JobKind = 'standard' | 'controller' | 'delegated-child'
+export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'
 export type PowerAction = 'none' | 'lock' | 'sleep' | 'hibernate' | 'shutdown' | 'restart'
 export type ProviderMode = 'codex' | 'fake'
 export type ApprovalDecision = 'accept' | 'acceptForSession' | 'decline' | 'cancel'
@@ -61,6 +64,9 @@ export interface Job {
   state: JobState
   provider: ProviderMode
   profile: string
+  kind: JobKind
+  requestedModel: string | null
+  requestedEffort: ReasoningEffort | null
   retryPolicy: RetryPolicy
   verification: VerificationCheckConfig[]
   powerPolicy: PowerPolicy
@@ -73,6 +79,72 @@ export interface Job {
   completedAt: string | null
   nextActionAt: string | null
   stateReason: string | null
+}
+
+export type DelegationStatus =
+  | 'child_queued'
+  | 'child_running'
+  | 'child_completed'
+  | 'child_blocked'
+  | 'child_failed'
+  | 'parent_resuming'
+  | 'resumed'
+  | 'cancelled'
+
+export interface DelegationResultPacket {
+  status: 'completed' | 'blocked' | 'failed'
+  summary: string
+  evidence: string[]
+  nextAction: string | null
+}
+
+export interface Delegation {
+  id: string
+  orchestrationId: string
+  parentJobId: string
+  parentAttemptId: string
+  childJobId: string
+  childAttemptId: string | null
+  sequence: number
+  status: DelegationStatus
+  requestedRole: string
+  agentProfile: 'LUNA_QA' | 'LUNA_DEV' | 'SOL_DEV'
+  taskClass: 'runtime_qa' | 'development'
+  complexity: 'low' | 'medium' | 'high' | 'unknown'
+  riskFlags: Record<string, 'no' | 'yes' | 'unknown'>
+  requestedModel: string
+  requestedEffort: ReasoningEffort
+  resolvedModel: string | null
+  resolvedEffort: ReasoningEffort | null
+  decision: Record<string, unknown>
+  result: DelegationResultPacket | null
+  triggerEvent: string
+  triggerAt: string
+  dispatchRequestedAt: string
+  whySelected: string
+  whyNotOtherDeveloper: string
+  policyMatch: 'accepted' | 'escalated' | 'corrected'
+  waitStrategy: string
+  escalatedTo: string | null
+  escalationReason: string | null
+  sourceWrite: boolean
+  parentModelTurnsWhileChildActive: number
+  parentProviderStartsWhileChildActive: number
+  parentProviderResumesWhileChildActive: number
+  parentCommandsWhileChildActive: number
+  parentStatusPollsWhileChildActive: number
+  unsolicitedChildStatusRequests: number
+  passiveWaitDurationMs: number
+  controllerTurnCount: number
+  childTurnCount: number
+  controllerAttemptCount: number
+  childAttemptCount: number
+  controllerActiveDurationMs: number
+  childActiveDurationMs: number
+  createdAt: string
+  childStartedAt: string | null
+  childFinishedAt: string | null
+  parentResumedAt: string | null
 }
 
 export interface Attempt {
@@ -286,6 +358,7 @@ export interface JobDetail {
   schedules: Schedule[]
   approvals: Approval[]
   verificationRuns: VerificationRun[]
+  delegations: Delegation[]
   powerCountdown: PowerCountdown | null
 }
 
@@ -326,6 +399,9 @@ export interface CreateJobInput {
   objective: string
   provider: ProviderMode
   profile?: string
+  kind?: JobKind
+  requestedModel?: string
+  requestedEffort?: ReasoningEffort
   retryPolicy: RetryPolicy
   verification: VerificationCheckConfig[]
   powerPolicy: PowerPolicy

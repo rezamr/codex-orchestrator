@@ -113,6 +113,7 @@ function nextStepText(): string {
       : 'Choose a resume date and time'
   if (job.state === 'WAITING_FOR_APPROVAL') return 'Your approval is required'
   if (job.state === 'WAITING_FOR_INPUT') return 'Your input is required'
+  if (job.state === 'WAITING_FOR_CHILD') return 'Controller is inactive until its child finishes'
   if (job.state === 'WAITING_FOR_RETRY')
     return job.nextActionAt
       ? `Retry at ${new Date(job.nextActionAt).toLocaleString()}`
@@ -204,7 +205,11 @@ async function cancelCountdown(scheduleId: string): Promise<void> {
         Checks retain workspace protection until they finish or reach their configured timeout.
         Cancellation is unavailable while they run.
       </p>
-      <section v-if="waitingForLimit" class="limit-resume-panel" aria-label="Usage reset scheduling">
+      <section
+        v-if="waitingForLimit"
+        class="limit-resume-panel"
+        aria-label="Usage reset scheduling"
+      >
         <div>
           <strong>{{ pendingResume ? 'Resume scheduled' : 'Manual resume time required' }}</strong>
           <p v-if="pendingResume">
@@ -367,6 +372,64 @@ async function cancelCountdown(scheduleId: string): Promise<void> {
           </details>
         </section>
 
+        <section v-if="detail.delegations.length" class="panel">
+          <div class="section-heading">
+            <div>
+              <h2>Delegation</h2>
+              <p>Durable routing records. A waiting controller has no active provider turn.</p>
+            </div>
+          </div>
+          <article
+            v-for="delegation in detail.delegations"
+            :key="delegation.id"
+            class="approval-card"
+          >
+            <strong
+              >Child {{ delegation.sequence }} ·
+              {{ delegation.status.replaceAll('_', ' ') }}</strong
+            >
+            <p>
+              {{ delegation.agentProfile }} · {{ delegation.requestedRole }} ·
+              {{ delegation.requestedModel }} · {{ delegation.requestedEffort }} effort
+            </p>
+            <p>
+              Resolved model/effort:
+              {{ delegation.resolvedModel ?? 'UNVERIFIED' }} ·
+              {{ delegation.resolvedEffort ?? 'UNVERIFIED' }}
+            </p>
+            <p>
+              Parent sleeping:
+              {{ ['child_queued', 'child_running'].includes(delegation.status) ? 'Yes' : 'No' }} ·
+              {{ delegation.taskClass }} · {{ delegation.complexity }} ·
+              {{ delegation.policyMatch }}
+            </p>
+            <p>{{ delegation.whySelected }}</p>
+            <p>
+              Parent activity while child active: turns
+              {{ delegation.parentModelTurnsWhileChildActive }}, starts
+              {{ delegation.parentProviderStartsWhileChildActive }}, resumes
+              {{ delegation.parentProviderResumesWhileChildActive }}, commands
+              {{ delegation.parentCommandsWhileChildActive }}, polls
+              {{ delegation.parentStatusPollsWhileChildActive }}, unsolicited status requests
+              {{ delegation.unsolicitedChildStatusRequests }}.
+            </p>
+            <p v-if="delegation.result">{{ delegation.result.summary }}</p>
+            <button
+              class="button"
+              type="button"
+              @click="
+                store.selectJob(
+                  detail.job.id === delegation.parentJobId
+                    ? delegation.childJobId
+                    : delegation.parentJobId
+                )
+              "
+            >
+              Open {{ detail.job.id === delegation.parentJobId ? 'child' : 'controller' }} job
+            </button>
+          </article>
+        </section>
+
         <section class="panel">
           <div class="section-heading">
             <div>
@@ -393,7 +456,10 @@ async function cancelCountdown(scheduleId: string): Promise<void> {
           </article>
         </section>
 
-        <details class="panel conversation-panel conversation-disclosure" @toggle="handleConversationToggle">
+        <details
+          class="panel conversation-panel conversation-disclosure"
+          @toggle="handleConversationToggle"
+        >
           <summary>
             <div>
               <strong>Conversation (optional)</strong>
@@ -402,56 +468,61 @@ async function cancelCountdown(scheduleId: string): Promise<void> {
             <span>{{ conversationExpanded ? 'Hide' : 'Show' }}</span>
           </summary>
           <div class="conversation-body">
-          <div class="section-heading">
-            <div>
-              <h2>Conversation output</h2>
-              <p>One message per response. Text is not stored in Orchestrator's database.</p>
+            <div class="section-heading">
+              <div>
+                <h2>Conversation output</h2>
+                <p>One message per response. Text is not stored in Orchestrator's database.</p>
+              </div>
+              <button
+                class="button"
+                type="button"
+                :disabled="conversationLoading || !detail.sessions.length"
+                @click="loadConversation()"
+              >
+                {{ conversationLoading ? 'Loading conversation…' : 'Load saved conversation' }}
+              </button>
             </div>
-            <button
-              class="button"
-              type="button"
-              :disabled="conversationLoading || !detail.sessions.length"
-              @click="loadConversation()"
+            <p v-if="conversationError" class="alert error">{{ conversationError }}</p>
+            <p
+              v-if="savedConversation?.truncated || detail.conversation.truncated"
+              class="alert warning"
             >
-              {{ conversationLoading ? 'Loading conversation…' : 'Load saved conversation' }}
-            </button>
-          </div>
-          <p v-if="conversationError" class="alert error">{{ conversationError }}</p>
-          <p
-            v-if="savedConversation?.truncated || detail.conversation.truncated"
-            class="alert warning"
-          >
-            This view reached its safe size limit. The original Codex conversation was not changed.
-          </p>
-          <p
-            v-if="!savedMessages.length && !detail.conversation.messages.length"
-            class="inline-empty"
-          >
-            No response loaded yet. Live messages appear here; use Load saved conversation for
-            earlier output.
-          </p>
-          <article v-for="message in savedMessages" :key="message.key" class="conversation-message">
-            <strong>{{ message.label }}</strong>
-            <span v-if="message.status !== 'completed'" class="provider-data-note">
-              — {{ message.status ?? 'Status unavailable' }}</span
+              This view reached its safe size limit. The original Codex conversation was not
+              changed.
+            </p>
+            <p
+              v-if="!savedMessages.length && !detail.conversation.messages.length"
+              class="inline-empty"
             >
-            <div class="conversation-text" dir="auto">{{ message.text }}</div>
-          </article>
-          <article
-            v-for="message in detail.conversation.messages"
-            :key="message.id"
-            class="conversation-message live-message"
-          >
-            <strong>Codex</strong><span class="provider-data-note"> — {{ message.status }}</span>
-            <p v-if="message.truncated" class="alert warning">Message exceeds the display limit.</p>
-            <div class="conversation-text" dir="auto">
-              {{ message.text || 'Waiting for message text…' }}
-            </div>
-          </article>
+              No response loaded yet. Live messages appear here; use Load saved conversation for
+              earlier output.
+            </p>
+            <article
+              v-for="message in savedMessages"
+              :key="message.key"
+              class="conversation-message"
+            >
+              <strong>{{ message.label }}</strong>
+              <span v-if="message.status !== 'completed'" class="provider-data-note">
+                — {{ message.status ?? 'Status unavailable' }}</span
+              >
+              <div class="conversation-text" dir="auto">{{ message.text }}</div>
+            </article>
+            <article
+              v-for="message in detail.conversation.messages"
+              :key="message.id"
+              class="conversation-message live-message"
+            >
+              <strong>Codex</strong><span class="provider-data-note"> — {{ message.status }}</span>
+              <p v-if="message.truncated" class="alert warning">
+                Message exceeds the display limit.
+              </p>
+              <div class="conversation-text" dir="auto">
+                {{ message.text || 'Waiting for message text…' }}
+              </div>
+            </article>
           </div>
         </details>
-
-
       </main>
 
       <aside>
@@ -465,6 +536,17 @@ async function cancelCountdown(scheduleId: string): Promise<void> {
             <div>
               <dt>Provider</dt>
               <dd>{{ detail.job.provider }}</dd>
+            </div>
+            <div>
+              <dt>Mode</dt>
+              <dd>{{ detail.job.kind }}</dd>
+            </div>
+            <div v-if="detail.job.requestedModel">
+              <dt>Requested routing</dt>
+              <dd>
+                {{ detail.job.requestedModel }} ·
+                {{ detail.job.requestedEffort ?? 'provider default' }}
+              </dd>
             </div>
             <div>
               <dt>Session</dt>

@@ -185,6 +185,7 @@ Do not style each screen independently.
 When a job is waiting on a Codex usage limit and no reliable provider reset time is available, the UI must not display an invented countdown or fallback time.
 
 The job detail must:
+
 - state that the reset time is unknown,
 - request a future local date/time,
 - persist the user's selection,
@@ -201,6 +202,7 @@ The Job detail screen is an operational control surface, not a transcript viewer
 The primary viewport should make the current stage, latest meaningful update, next action, and verification state visible without requiring the user to scroll through conversation text.
 
 Conversation content is secondary:
+
 - it stays collapsed by default,
 - saved conversation history is loaded only on demand,
 - long message bodies remain internally scrollable,

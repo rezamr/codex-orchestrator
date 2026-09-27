@@ -12,6 +12,7 @@ import type {
   CreateJobInput,
   DashboardSnapshot,
   DiagnosticSnapshot,
+  DelegationResultPacket,
   Job,
   JobEvent,
   JobState,
@@ -36,6 +37,17 @@ import type { PowerAdapter } from '@main/infrastructure/platform/power-adapter'
 import { DurableScheduler } from './scheduler'
 import { VerificationEngine } from './verification-engine'
 import { ConversationBuffer } from './conversation-buffer'
+import {
+  controllerDecisionOutputSchema,
+  controllerRoutingPrompt,
+  delegatedChildOutputSchema,
+  failedResultPacket,
+  MAX_DELEGATIONS_PER_PARENT,
+  parentResultPrompt,
+  parseControllerDecision,
+  parseDelegatedChildResult
+} from '@main/domain/delegation-contracts'
+import { AGENT_PROFILES, applyRoutingPolicy } from '@main/domain/agent-profiles'
 
 interface RuntimeAttempt {
   provider: AgentProvider
@@ -136,7 +148,16 @@ export class Orchestrator {
   async createJob(input: CreateJobInput): Promise<Job> {
     const project = this.store.getProject(input.projectId)
     await this.validateProjectPath(project.path)
-    const job = this.store.createJob(input)
+    const normalized: CreateJobInput =
+      input.kind === 'controller'
+        ? {
+            ...input,
+            profile: AGENT_PROFILES.ASTRA_CONTROLLER.id,
+            requestedModel: AGENT_PROFILES.ASTRA_CONTROLLER.model,
+            requestedEffort: AGENT_PROFILES.ASTRA_CONTROLLER.effort
+          }
+        : input
+    const job = this.store.createJob(normalized)
     this.emit(null)
     if (input.startImmediately) void this.processQueue()
     return job
@@ -185,7 +206,7 @@ export class Orchestrator {
         const settings = this.store.getSettings()
         if (
           this.store.activeJobCount() >= settings.maxConcurrentJobs ||
-          (settings.perProjectExclusive && this.store.activeJobCount(job.projectId) > 0)
+          (settings.perProjectExclusive && this.hasProjectConflict(job))
         )
           throw new AppError(
             'CONCURRENCY_LIMIT',
@@ -551,9 +572,18 @@ export class Orchestrator {
   private async drainQueue(): Promise<void> {
     if (this.shuttingDown) return
     const settings = this.store.getSettings()
-    for (const job of this.store.listJobs().filter((entry) => entry.state === 'QUEUED')) {
+    const jobs = this.store.listJobs()
+    const resumableParents = jobs.filter((entry) => {
+      if (entry.state !== 'WAITING_FOR_CHILD') return false
+      const delegation = this.store.getLatestDelegationForParent(entry.id)
+      return Boolean(
+        delegation?.result &&
+        ['child_completed', 'child_blocked', 'child_failed'].includes(delegation.status)
+      )
+    })
+    for (const job of [...resumableParents, ...jobs.filter((entry) => entry.state === 'QUEUED')]) {
       if (this.store.activeJobCount() >= settings.maxConcurrentJobs) return
-      if (settings.perProjectExclusive && this.store.activeJobCount(job.projectId) > 0) continue
+      if (settings.perProjectExclusive && this.hasProjectConflict(job)) continue
       await this.startJob(job.id)
     }
   }
@@ -562,11 +592,25 @@ export class Orchestrator {
     if (this.runtimes.has(jobId))
       throw new AppError('CONCURRENCY_LIMIT', 'Job already has an active attempt.')
     let job = this.store.getJob(jobId)
+    const startingState = job.state
+    if (startingState === 'WAITING_FOR_CHILD') {
+      const delegation = this.store.getLatestDelegationForParent(jobId)
+      if (
+        !delegation?.result ||
+        !['child_completed', 'child_blocked', 'child_failed'].includes(delegation.status)
+      ) {
+        throw new AppError(
+          'INVALID_TRANSITION',
+          'PARENT_MODEL_ACTIVE_WHILE_CHILD_RUNNING=FALSE: a terminal child result is required before parent resume.'
+        )
+      }
+    }
     if (
       ![
         'QUEUED',
         'WAITING_FOR_LIMIT',
         'WAITING_FOR_RETRY',
+        'WAITING_FOR_CHILD',
         'PAUSED',
         'NEEDS_REVIEW',
         'FAILED'
@@ -577,12 +621,22 @@ export class Orchestrator {
     const project = this.store.getProject(job.projectId)
     await this.validateProjectPath(project.path)
     const session = this.store.latestSession(jobId)
+    const latestDelegation =
+      job.kind === 'controller' ? this.store.getLatestDelegationForParent(jobId) : null
+    const delegatedContinuation =
+      latestDelegation?.result &&
+      ['child_completed', 'child_blocked', 'child_failed', 'parent_resuming'].includes(
+        latestDelegation.status
+      )
+        ? parentResultPrompt(latestDelegation.result)
+        : null
     const previousAttempt = this.store.getLatestAttempt(jobId)
     const rejectedBeforeTurn =
       previousAttempt?.providerTurnId === null &&
       previousAttempt.stopReason === PROVIDER_BUSY_STOP_REASON
     const kind = session ? 'resume' : this.store.getLatestAttempt(jobId) ? 'retry' : 'start'
     const attempt = this.store.createAttempt(jobId, kind)
+    if (startingState === 'WAITING_FOR_CHILD') this.store.markParentResuming(jobId)
     job = this.transition(
       jobId,
       'STARTING',
@@ -601,15 +655,33 @@ export class Orchestrator {
         ? await provider.resume({
             objective: job.objective,
             continuation:
-              attempt.number === 1 || rejectedBeforeTurn ? job.objective : CONTINUATION_PROMPT,
+              delegatedContinuation ??
+              (attempt.number === 1 || rejectedBeforeTurn ? job.objective : CONTINUATION_PROMPT),
             cwd: project.path,
             profile: job.profile,
+            model: job.requestedModel ?? undefined,
+            effort: job.requestedEffort ?? undefined,
+            outputSchema:
+              job.kind === 'controller'
+                ? controllerDecisionOutputSchema
+                : job.kind === 'delegated-child'
+                  ? delegatedChildOutputSchema
+                  : undefined,
             sessionId: session.externalId
           })
         : await provider.start({
-            objective: job.objective,
+            objective:
+              job.kind === 'controller' ? controllerRoutingPrompt(job.objective) : job.objective,
             cwd: project.path,
-            profile: job.profile
+            profile: job.profile,
+            model: job.requestedModel ?? undefined,
+            effort: job.requestedEffort ?? undefined,
+            outputSchema:
+              job.kind === 'controller'
+                ? controllerDecisionOutputSchema
+                : job.kind === 'delegated-child'
+                  ? delegatedChildOutputSchema
+                  : undefined
           })
       runtime.ref = ref
       this.store.saveSession(jobId, job.provider, ref.sessionId)
@@ -621,10 +693,29 @@ export class Orchestrator {
       const current = this.store.getJob(jobId)
       if (current.state === 'STARTING')
         this.transition(jobId, 'RUNNING', 'Provider turn is running.', attempt.id)
+      if (job.kind === 'delegated-child') this.store.markDelegatedChildRunning(jobId, attempt.id)
+      if (job.kind === 'controller' && delegatedContinuation) {
+        this.store.markParentControllerTurnStarted(jobId)
+        this.store.markParentResumed(jobId)
+      }
       await this.syncInhibitor()
     } catch (error) {
       await this.handleStartFailure(jobId, attempt.id, error)
     }
+  }
+
+  private hasProjectConflict(job: Job): boolean {
+    const delegation =
+      job.kind === 'delegated-child' ? this.store.getDelegationForChild(job.id) : null
+    return this.store
+      .listJobs()
+      .some(
+        (candidate) =>
+          candidate.id !== job.id &&
+          candidate.projectId === job.projectId &&
+          isProtectedState(candidate.state) &&
+          candidate.id !== delegation?.parentJobId
+      )
   }
 
   private enqueueProviderEvent(jobId: string, event: ProviderEvent): void {
@@ -784,12 +875,19 @@ export class Orchestrator {
         this.transition(jobId, 'NEEDS_REVIEW', providerEvent.message, attemptId)
         this.notify('Codex authentication required', providerEvent.message)
         await this.finishRuntime(jobId)
+        await this.settleFailedDelegatedChild(jobId, providerEvent.message)
         break
       case 'provider.disconnected':
         await this.handleTransientFailure(jobId, attemptId, providerEvent.message)
         break
       case 'turn.completed':
-        await this.handleCandidateCompletion(jobId, attemptId, providerEvent.message)
+        if (this.store.getJob(jobId).kind === 'controller') {
+          await this.handleControllerCompletion(jobId, attemptId, providerEvent)
+        } else if (this.store.getJob(jobId).kind === 'delegated-child') {
+          await this.handleDelegatedChildCompletion(jobId, attemptId, providerEvent)
+        } else {
+          await this.handleCandidateCompletion(jobId, attemptId, providerEvent.message)
+        }
         break
       case 'turn.failed':
         if (providerEvent.retryable)
@@ -804,10 +902,143 @@ export class Orchestrator {
           this.transition(jobId, 'FAILED', providerEvent.message, attemptId)
           await this.finishRuntime(jobId)
           this.notify('Job failed', providerEvent.message)
+          await this.settleFailedDelegatedChild(jobId, providerEvent.message)
         }
         break
     }
     await this.syncInhibitor()
+  }
+
+  private async handleControllerCompletion(
+    jobId: string,
+    attemptId: string | null,
+    event: Extract<ProviderEvent, { type: 'turn.completed' }>
+  ): Promise<void> {
+    if (this.store.getJob(jobId).state !== 'RUNNING') return
+    if (attemptId) this.store.recordControllerTurnFinished(jobId, attemptId)
+    const text = this.conversations.latestCompletedText(jobId, event.turnId)
+    if (!text) {
+      await this.failStructuredTurn(
+        jobId,
+        attemptId,
+        'Controller completed without one authoritative structured decision.'
+      )
+      return
+    }
+    let decision
+    try {
+      decision = parseControllerDecision(text)
+    } catch {
+      await this.failStructuredTurn(
+        jobId,
+        attemptId,
+        'Controller decision did not match the required schema.'
+      )
+      return
+    }
+    if (decision.action === 'blocked') {
+      if (attemptId)
+        this.store.updateAttempt(
+          attemptId,
+          { status: 'completed', stopReason: decision.summary },
+          true
+        )
+      this.transition(jobId, 'NEEDS_REVIEW', decision.summary, attemptId)
+      await this.finishRuntime(jobId)
+      return
+    }
+    if (decision.action === 'complete') {
+      await this.handleCandidateCompletion(jobId, attemptId, decision.summary)
+      return
+    }
+    if (!attemptId) {
+      await this.failStructuredTurn(
+        jobId,
+        null,
+        'Controller dispatch had no durable parent attempt.'
+      )
+      return
+    }
+    if (this.store.delegationCount(jobId) >= MAX_DELEGATIONS_PER_PARENT) {
+      await this.failStructuredTurn(
+        jobId,
+        attemptId,
+        `Controller reached the ${MAX_DELEGATIONS_PER_PARENT}-child delegation limit.`
+      )
+      return
+    }
+    const routing = applyRoutingPolicy(decision, {
+      lunaDevelopmentFailed: this.store.lunaDevelopmentFailed(jobId)
+    })
+    this.store.updateAttempt(attemptId, { status: 'completed', stopReason: decision.summary }, true)
+    try {
+      this.store.createDelegation(jobId, attemptId, decision, routing)
+    } catch (error) {
+      await this.failStructuredTurn(
+        jobId,
+        attemptId,
+        error instanceof Error ? error.message : 'Delegation policy rejected the child dispatch.'
+      )
+      return
+    }
+    await this.finishRuntime(jobId)
+    void this.processQueue()
+  }
+
+  private async handleDelegatedChildCompletion(
+    jobId: string,
+    attemptId: string | null,
+    event: Extract<ProviderEvent, { type: 'turn.completed' }>
+  ): Promise<void> {
+    const text = this.conversations.latestCompletedText(jobId, event.turnId)
+    if (!text) {
+      await this.failStructuredTurn(
+        jobId,
+        attemptId,
+        'Delegated child completed without an authoritative structured result.'
+      )
+      await this.settleFailedDelegatedChild(jobId, 'Delegated child result was missing.')
+      return
+    }
+    let result: DelegationResultPacket
+    try {
+      result = parseDelegatedChildResult(text)
+    } catch {
+      await this.failStructuredTurn(
+        jobId,
+        attemptId,
+        'Delegated child result did not match the required schema.'
+      )
+      await this.settleFailedDelegatedChild(jobId, 'Delegated child result was invalid.')
+      return
+    }
+    if (result.status === 'blocked') {
+      if (attemptId)
+        this.store.updateAttempt(
+          attemptId,
+          { status: 'completed', stopReason: result.summary },
+          true
+        )
+      this.transition(jobId, 'NEEDS_REVIEW', result.summary, attemptId)
+      await this.finishRuntime(jobId)
+      await this.settleDelegatedChild(jobId, 'child_blocked', result)
+      return
+    }
+    await this.handleCandidateCompletion(jobId, attemptId, result.summary)
+  }
+
+  private async failStructuredTurn(
+    jobId: string,
+    attemptId: string | null,
+    message: string
+  ): Promise<void> {
+    if (attemptId)
+      this.store.updateAttempt(attemptId, { status: 'failed', stopReason: message }, true)
+    const state = this.store.getJob(jobId).state
+    if (['STARTING', 'RUNNING'].includes(state)) {
+      this.transition(jobId, 'NEEDS_REVIEW', message, attemptId)
+    }
+    await this.finishRuntime(jobId)
   }
 
   private async handleLimit(
@@ -864,6 +1095,7 @@ export class Orchestrator {
         attemptId
       )
       await this.finishRuntime(jobId)
+      await this.settleFailedDelegatedChild(jobId, 'Maximum automatic retry attempts reached.')
       return
     }
 
@@ -893,6 +1125,10 @@ export class Orchestrator {
     if (job.automaticAttempts >= job.retryPolicy.maxAutomaticAttempts) {
       this.transition(jobId, 'NEEDS_REVIEW', 'Maximum automatic retry attempts reached.', attemptId)
       await this.finishRuntime(jobId)
+      await this.settleFailedDelegatedChild(
+        jobId,
+        'Delegated child exhausted automatic transient retries.'
+      )
       return
     }
     const dueAt = computeRetryAt(
@@ -946,6 +1182,7 @@ export class Orchestrator {
           attemptId
         )
         this.notify('Verification failed', `${project.name}: required checks did not pass.`)
+        await this.settleFailedDelegatedChild(jobId, 'Delegated child verification did not pass.')
         return
       }
       const completed = this.transition(
@@ -955,7 +1192,32 @@ export class Orchestrator {
         attemptId
       )
       this.notify('Job completed', `${project.name}: ${completed.objective.slice(0, 120)}`)
-      await this.schedulePowerIfEligible(completed)
+      if (completed.kind === 'delegated-child') {
+        const attempt = this.store.getLatestAttempt(jobId)
+        const text = this.conversations.latestCompletedText(
+          jobId,
+          attempt?.providerTurnId ?? undefined
+        )
+        let result: DelegationResultPacket
+        try {
+          result = text
+            ? parseDelegatedChildResult(text)
+            : failedResultPacket(
+                'Delegated child completed but its structured result was unavailable.'
+              )
+        } catch {
+          result = failedResultPacket(
+            'Delegated child completed but its structured result was invalid.'
+          )
+        }
+        await this.settleDelegatedChild(
+          jobId,
+          result.status === 'completed' ? 'child_completed' : 'child_failed',
+          result
+        )
+      } else {
+        await this.schedulePowerIfEligible(completed)
+      }
     } catch (error) {
       await this.recordUnexpected(jobId, error)
       if (this.store.getJob(jobId).state === 'VERIFYING') {
@@ -965,12 +1227,43 @@ export class Orchestrator {
           'Verification could not finish; inspect the error and rerun checks without repeating Codex work.',
           attemptId
         )
+        await this.settleFailedDelegatedChild(
+          jobId,
+          'Delegated child verification could not finish.'
+        )
       }
     } finally {
       this.verifyingJobs.delete(jobId)
       await this.syncInhibitor()
       void this.processQueue()
     }
+  }
+
+  private async settleFailedDelegatedChild(jobId: string, summary: string): Promise<void> {
+    if (this.store.getJob(jobId).kind !== 'delegated-child') return
+    await this.settleDelegatedChild(jobId, 'child_failed', failedResultPacket(summary))
+  }
+
+  private async settleDelegatedChild(
+    childJobId: string,
+    status: 'child_completed' | 'child_blocked' | 'child_failed',
+    result: DelegationResultPacket
+  ): Promise<void> {
+    const settled = this.store.settleDelegation(childJobId, status, result)
+    if (!settled) return
+    this.emit(
+      this.store.appendEvent(
+        settled.parentJobId,
+        settled.parentAttemptId,
+        'delegation.settled',
+        status === 'child_completed' ? 'info' : 'warning',
+        `Delegated child reached ${result.status}; controller will resume once.`,
+        { delegationId: settled.id, childJobId, status: result.status }
+      )
+    )
+    const parent = this.store.getJob(settled.parentJobId)
+    if (parent.state !== 'WAITING_FOR_CHILD') return
+    void this.processQueue()
   }
 
   private async schedulePowerIfEligible(job: Job): Promise<void> {
@@ -1133,6 +1426,53 @@ export class Orchestrator {
       if (isTerminalState(job.state) && schedule.kind !== 'power')
         this.store.resolveSchedule(schedule.id, 'obsolete')
     }
+    await this.recoverDelegations()
+  }
+
+  private async recoverDelegations(): Promise<void> {
+    for (const delegation of this.store.listOpenDelegations()) {
+      const parent = this.store.getJob(delegation.parentJobId)
+      const child = this.store.getJob(delegation.childJobId)
+      if (
+        ['child_completed', 'child_blocked', 'child_failed'].includes(delegation.status) &&
+        delegation.result &&
+        parent.state === 'WAITING_FOR_CHILD'
+      ) {
+        continue
+      }
+      if (
+        ['child_queued', 'child_running'].includes(delegation.status) &&
+        ['COMPLETED', 'VERIFICATION_FAILED', 'FAILED', 'CANCELLED'].includes(child.state)
+      ) {
+        const status = child.state === 'COMPLETED' ? 'child_completed' : 'child_failed'
+        const result: DelegationResultPacket =
+          child.state === 'COMPLETED'
+            ? {
+                status: 'completed',
+                summary: 'Child completion was recovered without its in-memory structured result.',
+                evidence: [],
+                nextAction: null
+              }
+            : failedResultPacket(`Child was reconciled after restart in ${child.state}.`)
+        this.store.settleDelegation(child.id, status, result)
+      }
+      if (
+        ['child_queued', 'child_running'].includes(delegation.status) &&
+        child.state === 'NEEDS_REVIEW' &&
+        parent.state === 'WAITING_FOR_CHILD'
+      ) {
+        this.emit(
+          this.store.appendEvent(
+            parent.id,
+            delegation.parentAttemptId,
+            'delegation.recovery_review',
+            'warning',
+            'Child ownership or completion is uncertain after restart; parent remains asleep and no duplicate child was started.',
+            { delegationId: delegation.id, childJobId: child.id }
+          )
+        )
+      }
+    }
   }
 
   private async pause(job: Job): Promise<void> {
@@ -1192,6 +1532,22 @@ export class Orchestrator {
         'INVALID_TRANSITION',
         'Checks are still running. Workspace protection remains held until they finish or reach their configured timeout.'
       )
+    }
+    if (job.state === 'WAITING_FOR_CHILD') {
+      const delegation = this.store.getLatestDelegationForParent(job.id)
+      if (delegation) {
+        const child = this.store.getJob(delegation.childJobId)
+        if (child.state === 'VERIFYING') {
+          throw new AppError(
+            'INVALID_TRANSITION',
+            'The delegated child is verifying. Workspace protection remains held until checks finish.'
+          )
+        }
+        this.store.cancelDelegation(job.id)
+        if (!isTerminalState(child.state)) await this.cancel(child)
+      } else {
+        this.store.cancelDelegation(job.id)
+      }
     }
     const runtime = this.runtimes.get(job.id)
     this.store.resolvePendingApprovals(job.id)
@@ -1257,6 +1613,7 @@ export class Orchestrator {
       )
     }
     await this.finishRuntime(jobId)
+    await this.settleFailedDelegatedChild(jobId, appError.message)
   }
 
   private async finishRuntime(jobId: string): Promise<void> {

@@ -48,11 +48,7 @@ function windowCandidate(
   return { resetAt, label }
 }
 
-function collectBucketWindows(
-  value: unknown,
-  label: string,
-  now: Date
-): BlockingWindow[] {
+function collectBucketWindows(value: unknown, label: string, now: Date): BlockingWindow[] {
   const bucket = asRecord(value)
   if (!bucket) return []
 

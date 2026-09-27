@@ -96,6 +96,42 @@ describe('Codex app-server JSONL transport', () => {
     await provider.disconnect()
   })
 
+  it('forwards verified per-turn model, effort, and output schema fields', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'codex-routing-test-'))
+    temporaryDirectories.push(directory)
+    const callLog = join(directory, 'rpc-methods.log')
+    const provider = new CodexAppServerProvider(
+      [resolve('tests/fixtures/fake-codex-app-server.mjs'), callLog],
+      async () => [process.execPath]
+    )
+    try {
+      await provider.start({
+        objective: 'return one decision',
+        cwd: process.cwd(),
+        profile: 'default',
+        model: 'gpt-6-astra',
+        effort: 'high',
+        outputSchema: {
+          $id: 'controller-test',
+          type: 'object',
+          required: ['action'],
+          properties: { action: { type: 'string' } }
+        }
+      })
+      const lines = (await readFile(callLog, 'utf8')).trim().split(/\r?\n/)
+      const encoded = lines.find((line) => line.startsWith('turn/start.params:'))
+      expect(encoded).toBeTruthy()
+      const params = JSON.parse(encoded!.slice('turn/start.params:'.length))
+      expect(params).toMatchObject({
+        model: 'gpt-6-astra',
+        effort: 'high',
+        outputSchema: { $id: 'controller-test' }
+      })
+    } finally {
+      await provider.disconnect()
+    }
+  })
+
   it('autodiscovers only the Codex CLI, including the desktop-managed Windows installation', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'codex-discovery-'))
     temporaryDirectories.push(directory)

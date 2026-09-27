@@ -16,7 +16,7 @@ These checks do not replace the controlled real-Codex or real-power procedures b
 
 ## Alpha.3 safe correction checks
 
-1. Close Orchestrator normally before upgrading; do not end another Codex client's work just to install this package. Install the new alpha.3 package; confirm Settings diagnostics reports alpha.3. Existing schema-3 data should remain, with no reset or migration.
+1. Close Orchestrator normally before upgrading; do not end another Codex client's work just to install this package. Install the current package; confirm Settings diagnostics reports the expected version. Existing schema-3 or schema-4 data should migrate to schema 5 without a reset.
 2. Use a disposable project, Simulated provider, no checks, and power action **none**. Submit `[stream] show a coherent response`: one Codex message should update in place, then show completed. This fake response does not consume Codex usage.
 3. Use the simulated objective `[busy] external owner`: confirm Needs review, **Retry when available**, no automatic retry schedule, and no power countdown. It stays simulated-busy on manual retry by design; this is not a way to acquire real ownership.
 4. Open an older job with word-sized activity rows. They should remain under collapsed **Raw provider activity**. **Load saved conversation** must read the original session without sending a turn, show retrieval failures/truncation, and leave old records intact. Saved output is escaped plain text, not a full Markdown clone.

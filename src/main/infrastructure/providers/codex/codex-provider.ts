@@ -573,7 +573,7 @@ export class CodexAppServerProvider implements AgentProvider {
     })
     const sessionId = nestedString(thread, 'thread', 'id')
     if (!sessionId) throw new AppError('PROTOCOL_ERROR', 'Codex did not return a thread id.')
-    return this.startTurn(sessionId, request.objective, request.cwd)
+    return this.startTurn(sessionId, request.objective, request.cwd, request)
   }
 
   async resume(request: ProviderResumeRequest): Promise<ProviderSessionRef> {
@@ -586,7 +586,7 @@ export class CodexAppServerProvider implements AgentProvider {
       sandbox: 'workspace-write',
       excludeTurns: true
     })
-    return this.startTurn(request.sessionId, request.continuation, request.cwd)
+    return this.startTurn(request.sessionId, request.continuation, request.cwd, request)
   }
 
   async interrupt(session: ProviderSessionRef): Promise<void> {
@@ -616,13 +616,18 @@ export class CodexAppServerProvider implements AgentProvider {
   private async startTurn(
     sessionId: string,
     text: string,
-    cwd: string
+    cwd: string,
+    request: ProviderStartRequest
   ): Promise<ProviderSessionRef> {
-    const response = await this.request<Record<string, any>>('turn/start', {
+    const params: Record<string, unknown> = {
       threadId: sessionId,
       cwd,
       input: [{ type: 'text', text }]
-    })
+    }
+    if (request.model) params.model = request.model
+    if (request.effort) params.effort = request.effort
+    if (request.outputSchema) params.outputSchema = request.outputSchema
+    const response = await this.request<Record<string, any>>('turn/start', params)
     const turnId = nestedString(response, 'turn', 'id')
     if (!turnId) throw new AppError('PROTOCOL_ERROR', 'Codex did not return a turn id.')
     return { sessionId, turnId }

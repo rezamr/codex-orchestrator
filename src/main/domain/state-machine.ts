@@ -8,6 +8,7 @@ const transitions: Readonly<Record<JobState, ReadonlySet<JobState>>> = {
     'RUNNING',
     'WAITING_FOR_APPROVAL',
     'WAITING_FOR_INPUT',
+    'WAITING_FOR_CHILD',
     'WAITING_FOR_LIMIT',
     'WAITING_FOR_RETRY',
     'FAILED',
@@ -17,6 +18,7 @@ const transitions: Readonly<Record<JobState, ReadonlySet<JobState>>> = {
   RUNNING: new Set([
     'WAITING_FOR_APPROVAL',
     'WAITING_FOR_INPUT',
+    'WAITING_FOR_CHILD',
     'WAITING_FOR_LIMIT',
     'WAITING_FOR_RETRY',
     'PAUSED',
@@ -27,6 +29,7 @@ const transitions: Readonly<Record<JobState, ReadonlySet<JobState>>> = {
   ]),
   WAITING_FOR_APPROVAL: new Set(['RUNNING', 'PAUSED', 'FAILED', 'NEEDS_REVIEW', 'CANCELLED']),
   WAITING_FOR_INPUT: new Set(['RUNNING', 'PAUSED', 'FAILED', 'NEEDS_REVIEW', 'CANCELLED']),
+  WAITING_FOR_CHILD: new Set(['STARTING', 'PAUSED', 'FAILED', 'NEEDS_REVIEW', 'CANCELLED']),
   WAITING_FOR_LIMIT: new Set(['STARTING', 'PAUSED', 'NEEDS_REVIEW', 'FAILED', 'CANCELLED']),
   WAITING_FOR_RETRY: new Set(['STARTING', 'PAUSED', 'NEEDS_REVIEW', 'FAILED', 'CANCELLED']),
   PAUSED: new Set(['QUEUED', 'STARTING', 'CANCELLED']),
@@ -56,9 +59,14 @@ export function isActiveState(state: JobState): boolean {
 }
 
 export function isProtectedState(state: JobState): boolean {
-  return ['STARTING', 'RUNNING', 'WAITING_FOR_APPROVAL', 'WAITING_FOR_INPUT', 'VERIFYING'].includes(
-    state
-  )
+  return [
+    'STARTING',
+    'RUNNING',
+    'WAITING_FOR_APPROVAL',
+    'WAITING_FOR_INPUT',
+    'WAITING_FOR_CHILD',
+    'VERIFYING'
+  ].includes(state)
 }
 
 export function isTerminalState(state: JobState): boolean {

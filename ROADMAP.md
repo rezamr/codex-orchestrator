@@ -44,6 +44,8 @@ This roadmap describes direction, not release dates. Completed capabilities refe
 
 ## Planned next
 
+- Harden and release event-driven controller/child orchestration: parent turns end during child work, dispatch/results are durable, and parent resume is triggered once by terminal child events rather than polling.
+
 - Complete controlled, documented Windows power-action validation before enabling those capabilities for a release.
 - Broaden installer, upgrade, accessibility, and platform testing; establish signing and update trust before distributing production builds.
 - Improve large-history search and browsing without exceeding safe memory/rendering bounds.

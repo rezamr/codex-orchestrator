@@ -7,6 +7,7 @@ import { useOrchestratorStore } from '../stores/orchestrator'
 import type {
   PowerAction,
   ProviderMode,
+  JobKind,
   VerificationCheckConfig,
   VerificationKind
 } from '@shared/types/domain'
@@ -18,6 +19,7 @@ const advanced = ref(false)
 const projectId = ref('')
 const objective = ref('')
 const provider = ref<ProviderMode>('codex')
+const jobKind = ref<Exclude<JobKind, 'delegated-child'>>('standard')
 onMounted(async () => {
   if (!store.settings) await store.loadSettings()
   provider.value = store.settings?.providerMode ?? 'codex'
@@ -120,6 +122,9 @@ async function submit(): Promise<void> {
     objective: objective.value,
     provider: provider.value,
     profile: 'default',
+    kind: jobKind.value,
+    requestedModel: jobKind.value === 'controller' ? 'gpt-6-astra' : undefined,
+    requestedEffort: jobKind.value === 'controller' ? 'high' : undefined,
     retryPolicy: {
       maxAutomaticAttempts: maxAttempts.value,
       baseDelaySeconds: 60,
@@ -224,6 +229,22 @@ function checkLabel(kind: VerificationKind): string {
             </option>
           </select></label
         >
+        <label v-if="!continuingThreadId"
+          ><span>Job mode</span
+          ><select v-model="jobKind">
+            <option value="standard">Standard job</option>
+            <option value="controller">Event-driven controller</option>
+          </select>
+          <small v-if="jobKind === 'controller'"
+            >The controller ends its turn while each delegated child runs.</small
+          ></label
+        >
+        <template v-if="!continuingThreadId && jobKind === 'controller'">
+          <div class="field-summary">
+            <span>Controller profile</span>
+            <strong>ASTRA_CONTROLLER · gpt-6-astra · high effort</strong>
+          </div>
+        </template>
         <label v-if="!continuingThreadId"
           ><span>Provider</span
           ><select v-model="provider">
@@ -341,6 +362,7 @@ function checkLabel(kind: VerificationKind): string {
               <th>Objective</th>
               <th>Project</th>
               <th>Status</th>
+              <th>Mode</th>
               <th>Provider</th>
               <th>Updated</th>
             </tr>
@@ -356,6 +378,7 @@ function checkLabel(kind: VerificationKind): string {
               <td class="objective-cell">{{ job.objective }}</td>
               <td>{{ job.projectName }}</td>
               <td><StatusPill :state="job.state" /></td>
+              <td>{{ job.kind === 'delegated-child' ? 'Child' : job.kind }}</td>
               <td>{{ job.provider }}</td>
               <td>{{ new Date(job.updatedAt).toLocaleString() }}</td>
             </tr>

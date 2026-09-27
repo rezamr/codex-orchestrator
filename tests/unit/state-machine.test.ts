@@ -21,5 +21,7 @@ describe('job state machine', () => {
   it('allows waiting work to resume through a new start', () => {
     expect(canTransition('WAITING_FOR_LIMIT', 'STARTING')).toBe(true)
     expect(canTransition('WAITING_FOR_RETRY', 'STARTING')).toBe(true)
+    expect(canTransition('WAITING_FOR_CHILD', 'STARTING')).toBe(true)
+    expect(canTransition('RUNNING', 'WAITING_FOR_CHILD')).toBe(true)
   })
 })

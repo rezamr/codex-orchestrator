@@ -10,7 +10,7 @@ Codex Orchestrator is an independent community project and is not an official Op
 
 Engineering work can outlast a single Codex session or a person’s time at the computer. A task may encounter a usage limit, wait for approval, need a safe continuation after a restart, or require tests before it can be called complete. Codex Orchestrator provides a durable operational view for that work without screen scraping or simulated mouse and keyboard input.
 
-It does not bypass Codex or OpenAI authentication, safety controls, billing, or usage limits. When a supported provider limit pauses work, the application waits according to provider state and the configured bounded retry policy; it resumes only when allowed and safe.
+It does not bypass Codex or OpenAI authentication, safety controls, billing, or usage limits. When a supported provider limit pauses work, the application uses a reliable provider reset timestamp when available. If Codex cannot supply one even after a supported rate-limit refresh, Orchestrator does not guess a fallback time: it asks the user to choose a future local date/time. Bounded backoff remains reserved for transient provider/network failures.
 
 ## What is implemented
 

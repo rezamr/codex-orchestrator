@@ -65,10 +65,11 @@ When the provider indicates work cannot continue due to a usage/budget limit:
 
 - the job moves to a dedicated waiting state,
 - the reason is retained,
-- a reset/retry time is recorded if reliably available,
-- otherwise a bounded fallback retry policy is used,
-- the user can cancel, pause, edit policy, or request a manual retry,
-- automatic continuation resumes the same durable objective/session where supported.
+- a reset time is recorded only when it is reliably supplied or derived from supported provider rate-limit data,
+- sparse rate-limit notifications are refreshed/merged before the reset time is considered unknown,
+- if no reliable reset time exists, no automatic time is guessed and the user is asked to choose a future local date/time,
+- the user can cancel, pause, change the scheduled time, or request a deliberate Resume now,
+- automatic or user-scheduled continuation resumes the same durable objective/session where supported.
 
 The product must not claim to bypass a limit; it waits until the provider permits continued work.
 
@@ -142,8 +143,10 @@ If configured, a disruptive power action is eligible only after successful verif
 
 - Use persisted schedules rather than in-memory timers alone.
 - Recompute overdue schedules after restart.
-- Store the source and confidence of a retry time: provider-structured, parsed/estimated, user-specified, or fallback.
-- Apply jitter/backoff where appropriate.
+- Store the source and confidence of a scheduled time: provider-structured, provider-parsed, or user-specified.
+- Refresh/merge Codex rate-limit state before deciding that a usage reset time is unknown.
+- Never invent a usage-limit reset time; request a future local date/time from the user when provider timing is unavailable.
+- Apply bounded jitter/backoff only to transient retryable provider/network failures where appropriate.
 - Prevent tight retry loops.
 
 ### Verification

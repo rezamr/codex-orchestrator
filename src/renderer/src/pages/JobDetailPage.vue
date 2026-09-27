@@ -10,6 +10,7 @@ const detail = computed(() => store.selectedJob)
 const savedConversation = ref<CodexThreadDetail | null>(null)
 const conversationLoading = ref(false)
 const conversationError = ref<string | null>(null)
+const conversationExpanded = ref(false)
 const manualResumeAt = ref('')
 const busy = computed(() =>
   /active writer|owned by another active Codex client/i.test(detail.value?.job.stateReason ?? '')
@@ -20,6 +21,10 @@ const audit = computed(
 const rawActivity = computed(
   () => detail.value?.events.filter((event) => event.type === 'activity') ?? []
 )
+const visibleAudit = computed(() => audit.value.slice(0, 10))
+const olderAudit = computed(() => audit.value.slice(10))
+const latestAudit = computed(() => audit.value[0] ?? null)
+const latestVerification = computed(() => detail.value?.verificationRuns[0] ?? null)
 const pendingResume = computed(
   () =>
     detail.value?.schedules.find(
@@ -78,9 +83,8 @@ watch(
   () => {
     savedConversation.value = null
     conversationError.value = null
+    conversationExpanded.value = false
     manualResumeAt.value = toLocalDateTimeInput(detail.value?.job.nextActionAt ?? null)
-    if (detail.value?.sessions.length && !detail.value.conversation.messages.length)
-      void loadConversation()
   },
   { immediate: true }
 )
@@ -98,6 +102,41 @@ async function scheduleManualResume(): Promise<void> {
   const selected = new Date(manualResumeAt.value)
   if (!Number.isFinite(selected.getTime())) return
   await store.scheduleJobResume(jobId, selected.toISOString())
+}
+
+function nextStepText(): string {
+  const job = detail.value?.job
+  if (!job) return 'No job selected'
+  if (job.state === 'WAITING_FOR_LIMIT')
+    return job.nextActionAt
+      ? `Resume at ${new Date(job.nextActionAt).toLocaleString()}`
+      : 'Choose a resume date and time'
+  if (job.state === 'WAITING_FOR_APPROVAL') return 'Your approval is required'
+  if (job.state === 'WAITING_FOR_INPUT') return 'Your input is required'
+  if (job.state === 'WAITING_FOR_RETRY')
+    return job.nextActionAt
+      ? `Retry at ${new Date(job.nextActionAt).toLocaleString()}`
+      : 'Waiting for retry'
+  if (job.state === 'VERIFYING') return 'Verification checks are running'
+  if (job.state === 'RUNNING' || job.state === 'STARTING') return 'Codex is working'
+  if (job.state === 'PAUSED') return 'Resume when ready'
+  if (job.state === 'COMPLETED') return 'No further action'
+  if (job.state === 'FAILED' || job.state === 'VERIFICATION_FAILED' || job.state === 'NEEDS_REVIEW')
+    return 'Review the issue and retry when ready'
+  if (job.state === 'CANCELLED') return 'No further action'
+  return job.nextActionAt ? new Date(job.nextActionAt).toLocaleString() : 'Ready'
+}
+
+function handleConversationToggle(event: Event): void {
+  const element = event.currentTarget as HTMLDetailsElement
+  conversationExpanded.value = element.open
+  if (
+    element.open &&
+    !savedConversation.value &&
+    !conversationLoading.value &&
+    detail.value?.sessions.length
+  )
+    void loadConversation()
 }
 
 const actions = computed(() => {
@@ -177,7 +216,7 @@ async function cancelCountdown(scheduleId: string): Promise<void> {
           </p>
         </div>
         <label class="resume-time-field">
-          <span>Resume date and time</span>
+          <span>Resume date and time — local time</span>
           <input v-model="manualResumeAt" type="datetime-local" />
         </label>
         <button
@@ -210,6 +249,25 @@ async function cancelCountdown(scheduleId: string): Promise<void> {
         </button>
       </div>
     </header>
+
+    <section class="job-progress-strip" aria-label="Job progress summary">
+      <div>
+        <span>Current stage</span>
+        <strong>{{ detail.job.stateReason }}</strong>
+      </div>
+      <div>
+        <span>Latest update</span>
+        <strong>{{ latestAudit?.message ?? 'No activity yet' }}</strong>
+      </div>
+      <div>
+        <span>Next</span>
+        <strong>{{ nextStepText() }}</strong>
+      </div>
+      <div>
+        <span>Verification</span>
+        <strong>{{ latestVerification?.status ?? 'Not started' }}</strong>
+      </div>
+    </section>
 
     <div class="detail-layout">
       <main>
@@ -259,7 +317,91 @@ async function cancelCountdown(scheduleId: string): Promise<void> {
           </article>
         </section>
 
-        <section class="panel conversation-panel" aria-label="Conversation output">
+        <section class="panel">
+          <div class="section-heading">
+            <div>
+              <h2>Activity timeline</h2>
+              <p>Provider activity and orchestration decisions.</p>
+            </div>
+          </div>
+          <ol class="timeline">
+            <li v-for="event in visibleAudit" :key="event.id" :class="event.level">
+              <span class="timeline-marker" aria-hidden="true"></span>
+              <div>
+                <div class="timeline-title">
+                  <strong>{{ event.type.replaceAll('.', ' · ') }}</strong
+                  ><time>{{ new Date(event.createdAt).toLocaleString() }}</time>
+                </div>
+                <p>{{ event.message }}</p>
+              </div>
+            </li>
+          </ol>
+          <details v-if="olderAudit.length" class="raw-provider-activity older-activity">
+            <summary>Older activity ({{ olderAudit.length }})</summary>
+            <ol class="timeline">
+              <li v-for="event in olderAudit" :key="event.id" :class="event.level">
+                <span class="timeline-marker" aria-hidden="true"></span>
+                <div>
+                  <div class="timeline-title">
+                    <strong>{{ event.type.replaceAll('.', ' · ') }}</strong
+                    ><time>{{ new Date(event.createdAt).toLocaleString() }}</time>
+                  </div>
+                  <p>{{ event.message }}</p>
+                </div>
+              </li>
+            </ol>
+          </details>
+          <details v-if="rawActivity.length" class="raw-provider-activity">
+            <summary>
+              Raw provider activity ({{ rawActivity.length }} entries, including legacy fragments)
+            </summary>
+            <ol class="timeline">
+              <li v-for="event in rawActivity" :key="event.id" :class="event.level">
+                <span class="timeline-marker" aria-hidden="true"></span>
+                <div>
+                  <time>{{ new Date(event.createdAt).toLocaleString() }}</time>
+                  <p>{{ event.message }}</p>
+                </div>
+              </li>
+            </ol>
+          </details>
+        </section>
+
+        <section class="panel">
+          <div class="section-heading">
+            <div>
+              <h2>Verification</h2>
+              <p>Machine-verifiable completion evidence.</p>
+            </div>
+          </div>
+          <div v-if="detail.verificationRuns.length === 0" class="inline-empty">
+            No verification run has started.
+          </div>
+          <article v-for="run in detail.verificationRuns" :key="run.id" class="verification-run">
+            <div class="run-heading">
+              <strong>{{ run.status }}</strong
+              ><time>{{ new Date(run.startedAt).toLocaleString() }}</time>
+            </div>
+            <details v-for="check in run.checks" :key="check.id">
+              <summary>
+                <span>{{ check.passed ? '✓' : '×' }} {{ check.label }}</span
+                ><code>{{ check.command }}</code>
+              </summary>
+              <pre>{{ check.output || 'No output' }}</pre>
+              <p v-if="check.error" class="alert error">{{ check.error }}</p>
+            </details>
+          </article>
+        </section>
+
+        <details class="panel conversation-panel conversation-disclosure" @toggle="handleConversationToggle">
+          <summary>
+            <div>
+              <strong>Conversation (optional)</strong>
+              <span>Open only when you need the Codex response text.</span>
+            </div>
+            <span>{{ conversationExpanded ? 'Hide' : 'Show' }}</span>
+          </summary>
+          <div class="conversation-body">
           <div class="section-heading">
             <div>
               <h2>Conversation output</h2>
@@ -306,68 +448,10 @@ async function cancelCountdown(scheduleId: string): Promise<void> {
               {{ message.text || 'Waiting for message text…' }}
             </div>
           </article>
-        </section>
+          </div>
+        </details>
 
-        <section class="panel">
-          <div class="section-heading">
-            <div>
-              <h2>Activity timeline</h2>
-              <p>Provider activity and orchestration decisions.</p>
-            </div>
-          </div>
-          <ol class="timeline">
-            <li v-for="event in audit" :key="event.id" :class="event.level">
-              <span class="timeline-marker" aria-hidden="true"></span>
-              <div>
-                <div class="timeline-title">
-                  <strong>{{ event.type.replaceAll('.', ' · ') }}</strong
-                  ><time>{{ new Date(event.createdAt).toLocaleString() }}</time>
-                </div>
-                <p>{{ event.message }}</p>
-              </div>
-            </li>
-          </ol>
-          <details v-if="rawActivity.length" class="raw-provider-activity">
-            <summary>
-              Raw provider activity ({{ rawActivity.length }} entries, including legacy fragments)
-            </summary>
-            <ol class="timeline">
-              <li v-for="event in rawActivity" :key="event.id" :class="event.level">
-                <span class="timeline-marker" aria-hidden="true"></span>
-                <div>
-                  <time>{{ new Date(event.createdAt).toLocaleString() }}</time>
-                  <p>{{ event.message }}</p>
-                </div>
-              </li>
-            </ol>
-          </details>
-        </section>
 
-        <section class="panel">
-          <div class="section-heading">
-            <div>
-              <h2>Verification</h2>
-              <p>Machine-verifiable completion evidence.</p>
-            </div>
-          </div>
-          <div v-if="detail.verificationRuns.length === 0" class="inline-empty">
-            No verification run has started.
-          </div>
-          <article v-for="run in detail.verificationRuns" :key="run.id" class="verification-run">
-            <div class="run-heading">
-              <strong>{{ run.status }}</strong
-              ><time>{{ new Date(run.startedAt).toLocaleString() }}</time>
-            </div>
-            <details v-for="check in run.checks" :key="check.id">
-              <summary>
-                <span>{{ check.passed ? '✓' : '×' }} {{ check.label }}</span
-                ><code>{{ check.command }}</code>
-              </summary>
-              <pre>{{ check.output || 'No output' }}</pre>
-              <p v-if="check.error" class="alert error">{{ check.error }}</p>
-            </details>
-          </article>
-        </section>
       </main>
 
       <aside>

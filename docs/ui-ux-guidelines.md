@@ -193,3 +193,18 @@ The job detail must:
 - keep a deliberate **Resume now** action separate from scheduled resume.
 
 When Codex supplies the reset time, label it as provider-supplied rather than user-specified.
+
+## Job detail information hierarchy
+
+The Job detail screen is an operational control surface, not a transcript viewer.
+
+The primary viewport should make the current stage, latest meaningful update, next action, and verification state visible without requiring the user to scroll through conversation text.
+
+Conversation content is secondary:
+- it stays collapsed by default,
+- saved conversation history is loaded only on demand,
+- long message bodies remain internally scrollable,
+- activity history beyond the recent set is collapsed,
+- full conversation inspection remains available through the optional disclosure and Open in ChatGPT action.
+
+Manual usage-reset date/time input is explicitly interpreted as the user's **local system time**. Durable storage continues to use an absolute ISO/UTC timestamp.

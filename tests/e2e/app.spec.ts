@@ -169,11 +169,15 @@ test('loads saved output and keeps legacy fragments collapsed but accessible', a
   await expect.poll(async () => (await detail(harness.page, jobId)).job.state).toBe('COMPLETED')
   await harness.page.getByRole('button', { name: 'Jobs', exact: true }).click()
   await harness.page.getByText('[legacy] inspect historical output', { exact: true }).click()
-  await expect(harness.page.locator('.conversation-panel')).toContainText(
+  const conversation = harness.page.locator('.conversation-disclosure')
+  await expect(conversation).not.toHaveAttribute('open', '')
+  await conversation.locator('summary').click()
+  await expect(conversation).toHaveAttribute('open', '')
+  await expect(conversation).toContainText(
     'This fixture verifies the read-only history UI without contacting Codex.'
   )
   await expect(harness.page.getByText('legacy-frag-one', { exact: true })).toBeHidden()
-  await harness.page.locator('.raw-provider-activity summary').click()
+  await harness.page.getByText(/Raw provider activity/).click()
   await expect(harness.page.getByText('legacy-frag-one', { exact: true })).toBeVisible()
   expect(
     (await detail(harness.page, jobId)).events.some((event) => event.message === 'legacy-frag-one')
@@ -196,7 +200,9 @@ test('creates and completes a job through the desktop UI', async () => {
     timeout: 10_000
   })
   await expect(harness.page.getByText('Provider completed; verification is running.')).toBeVisible()
-  await expect(harness.page.getByText('passed', { exact: true })).toBeVisible()
+  await expect(
+    harness.page.locator('.verification-run').getByText('passed', { exact: true })
+  ).toBeVisible()
 })
 
 test('surfaces an approval and resumes only after the user approves it', async () => {
@@ -273,7 +279,16 @@ test('asks for a manual date and time when Codex reset time is unknown', async (
     harness.page.getByText(/Codex did not provide a reliable reset time/)
   ).toBeVisible()
 
-  await harness.page.getByLabel('Resume date and time').fill('2099-01-01T12:30')
+  await expect(harness.page.getByText('Current stage', { exact: true })).toBeVisible()
+  await expect(harness.page.getByText('Next', { exact: true })).toBeVisible()
+  const conversation = harness.page.locator('.conversation-disclosure')
+  await expect(conversation).not.toHaveAttribute('open', '')
+  await conversation.locator('summary').click()
+  await expect(conversation).toHaveAttribute('open', '')
+  await conversation.locator('summary').click()
+  await expect(conversation).not.toHaveAttribute('open', '')
+
+  await harness.page.getByLabel('Resume date and time — local time').fill('2099-01-01T12:30')
   await harness.page.getByRole('button', { name: 'Schedule resume', exact: true }).click()
 
   await expect(harness.page.getByText('Resume scheduled', { exact: true })).toBeVisible()
